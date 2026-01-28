@@ -48,3 +48,6 @@
 148|iOS Development|Apple|4|4
 149|Blockchain Basics|Antonopoulos|6|5
 150|Ethical Hacking|EC Council|5|2
+151|test.1|sahil|5|2
+152|test.2|sahil|5|3
+153|test.3|sahil|5|3
