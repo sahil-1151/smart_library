@@ -25,7 +25,7 @@ struct treenode * createnode(int book_id,const char *title,const char *author,in
 
 void view(struct treenode *root){
     if(root==NULL)return;
-    printf("\nTitle : %s\nAuthor : %s\nAvailable copies : %d \n",root->title,root->author,root->available_copies);
+    printf("\nBook Id :%d\nTitle : %s\nAuthor : %s\nAvailable copies : %d \n",root->book_id,root->title,root->author,root->available_copies);
     view(root->left);
     view(root->right);
 }

@@ -17,6 +17,18 @@ static int days_in_month(int month, int year) {
     return days[month - 1];
 }
 
+struct date current_date(){
+    struct date d1;
+    time_t now;
+    struct tm *current;
+    time(&now);
+    current=localtime(&now);
+    d1.year=current->tm_year+1900;
+    d1.month=current->tm_mon+1;
+    d1.day=current->tm_mday;
+    return d1;
+}
+
 int compare_date(struct date d1, struct date d2) {
     if (d1.year != d2.year)
         return d1.year - d2.year;
@@ -58,24 +70,48 @@ struct node *create_issue_node(int student_id,
     return n;
 }
 
-void issue_book(struct node **top,
+int view_issue_book(struct node *root,int student_id){
+    if(root==NULL){
+        return 0;
+    }
+    int ch=0;
+    struct node *temp=root;
+    while(temp!=NULL){
+        if(temp->student_id==student_id){
+            ch=1;
+            printf("\nBook Id : %d",temp->book_id);
+            printf("\nIssue Date : %d|%d|%d",temp->issue_date.day,temp->issue_date.month,temp->issue_date.year);
+            printf("\nDue Date : %d|%d|%d\n",temp->due_date.day,temp->due_date.month,temp->due_date.year);
+        }
+        temp=temp->next;
+    }
+    return ch;
+}
+
+int issue_book( struct node **top,
+                struct treenode *root,
                 int student_id,
                 int book_id,
                 struct date issue_date)
-{
+{   
+    struct treenode *temp=search_id(root,book_id);
+    if(temp == NULL || temp->available_copies == 0){
+        printf("temp is null");
+        return 0;
+    }
     struct date due_date = add_days(issue_date, 14);
-
     struct node *n =
         create_issue_node(student_id, book_id,
                           issue_date, due_date);
 
     if (!n) {
         printf("Issue failed: memory error\n");
-        return;
+        return 0;
     }
-
+    temp->available_copies -= 1;
     n->next = *top;
     *top = n;
+    return 1;
 }
 
 int return_book(struct node **top,

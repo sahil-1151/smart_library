@@ -1,6 +1,6 @@
-101|C Programming|Dennis Ritchie|5|3
-102|Data Structures|Mark Weiss|4|2
-103|Operating Systems|Galvin|6|6
+101|C Programming|Dennis Ritchie|5|2
+102|Data Structures|Mark Weiss|4|1
+103|Operating Systems|Galvin|6|5
 104|Computer Networks|Tanenbaum|3|0
 105|Database Systems|Elmasri|5|4
 106|Algorithms|CLRS|7|5

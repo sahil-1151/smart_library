@@ -112,9 +112,9 @@ int main(void) {
 
     while (1) {
         printf("\n--- USER ---\n");
-        printf("1. Register\n");
-        printf("2. Login\n");
-        printf("3. Back\n");
+        printf("1. Register\n");//done
+        printf("2. Login\n");//done
+        printf("3. Back\n");//done
         printf("Enter choice: ");
 
         if (scanf("%d", &entry_choice) != 1) {
@@ -122,7 +122,6 @@ int main(void) {
             continue;
         }
         clear_input_buffer();
-        
         if (entry_choice == 1) {
             char name[25], email[50], password[25];
 
@@ -168,99 +167,135 @@ int main(void) {
         }
 
         else if (entry_choice == 2) {
-            char email[50], password[25];
+                        char email[50], password[25];
 
-            printf("Email: ");
-            fgets(email, sizeof(email), stdin);
-            email[strcspn(email, "\n")] = '\0';
+                        printf("Email: ");
+                        fgets(email, sizeof(email), stdin);
+                        email[strcspn(email, "\n")] = '\0';
 
-            printf("Password: ");
-            fgets(password, sizeof(password), stdin);
-            password[strcspn(password, "\n")] = '\0';
+                        printf("Password: ");
+                        fgets(password, sizeof(password), stdin);
+                        password[strcspn(password, "\n")] = '\0';
 
-            if (!authenticate_user(user_root, email, password)) {
-                printf("Login failed\n");
-                continue;
-            }
-
-            printf("Login successful\n");
-
-            while (1) {
-                int user_choice;
-                printf("\n--- USER MENU ---\n");
-                printf("1. View books\n");
-                printf("2. Search books\n");
-                printf("3. Issue book\n");
-                printf("4. Return book\n");
-                printf("5. Logout\n");
-                printf("Enter Choice: ");
-                scanf("%d",&user_choice);
-                if (user_choice == 1){
-                    view(book_root);
-                }
-                else if(user_choice == 2){
-                    while(1){
-                    printf("\n--- Searching Choice ---\n");
-                    printf("1. Search Id \n");
-                    printf("2. Search Title \n");
-                    printf("3. Search Author \n");
-                    printf("4. Back \n");
-                    printf("Enter Choice :");
-                    scanf("%d",&user_choice);
-                    clear_input_buffer();
-                    if(user_choice == 1){
-                        int id;
-                        printf("\nEnter Book Id :");
-                        scanf("%d",&id);
-                        struct treenode *temp=search_id(book_root,id);
-                        if(temp == NULL){
-                            printf("\nBook Not Found ...\n");
+                        if (!authenticate_user(user_root, email, password)) {
+                            printf("Login failed\n");
+                            continue;
                         }
-                        else{
-                            printf("\n      Book Id     : %d\n",temp->book_id);
-                            printf("      Title       : %s\n",temp->title);
-                            printf("      Author      : %s\n",temp->author);
-                            printf(" Available Copies : %d\n",temp->available_copies);
+                        struct student *temp_student=search_user_by_email(user_root,email);
+                        printf("Login successful\n");
+
+                        while (1) {
+                            int user_choice;
+                            printf("\n--- USER MENU ---\n");
+                            printf("1. User Information\n");
+                            printf("2. View books\n");//done
+                            printf("3. Search books\n");//done
+                            printf("4. Issue book\n");//done
+                            printf("5. Return book\n");
+                            printf("6. View Issue Book\n");//done
+                            printf("7. Logout\n");
+                            printf("Enter Choice: ");
+                            scanf("%d",&user_choice);
+                            if (user_choice == 1){
+                                printf("\n   Name    : %s",temp_student->name);
+                                printf("\n   Email   : %s",temp_student->email);
+                                printf("\nStudent id : %d\n",temp_student->id);
+                            }
+                            else if (user_choice == 2){
+                                view(book_root);
+                            }
+
+                            else if(user_choice == 3){
+                                        while(1){
+                                        printf("\n--- Searching Choice ---\n");
+                                        printf("1. Search Id \n");//done
+                                        printf("2. Search Title \n");//done
+                                        printf("3. Search Author \n");//done
+                                        printf("4. Back \n");//done
+                                        printf("Enter Choice :");
+                                        scanf("%d",&user_choice);
+                                        clear_input_buffer();
+                                        if(user_choice == 1){
+                                            int id;
+                                            printf("\nEnter Book Id :");
+                                            scanf("%d",&id);
+                                            struct treenode *temp=search_id(book_root,id);
+                                            if(temp == NULL){
+                                                printf("\nBook Not Found ...\n");
+                                            }
+                                            else{
+                                                printf("\n      Book Id     : %d\n",temp->book_id);
+                                                printf("      Title       : %s\n",temp->title);
+                                                printf("      Author      : %s\n",temp->author);
+                                                printf(" Available Copies : %d\n",temp->available_copies);
+                                            }
+                                        }
+                                        else if(user_choice == 2){
+                                            char search_titl[25];
+                                            printf("Enter Title :");
+                                            fgets(search_titl, sizeof(search_titl), stdin);
+                                            search_titl[strcspn(search_titl, "\n")] = '\0';
+                                            if(!search_string(book_root,search_titl)){
+                                                printf("\nBook Not Found ...\n");
+                                            }
+
+                                        }
+                                        else if(user_choice == 3){
+                                            char search_auth[25];
+                                            printf("Enter Author Name :");
+                                            fgets(search_auth, sizeof(search_auth), stdin);
+                                            search_auth[strcspn(search_auth, "\n")] = '\0';
+                                            if(!search_string(book_root,search_auth)){
+                                                printf("\nBook Not Found ...\n");
+                                            }
+
+                                        }
+                                        else if(user_choice == 4){
+                                            break;
+                                        }
+                                        else {
+                                            printf("Invalid Choice ...");
+                                        }
+                                    }
+                            }
+                            else if(user_choice == 4){
+                                int book_id;
+                                struct date d1;
+                                printf("\nEnter Book Id :");
+                                scanf("%d",&book_id);
+                                d1=current_date();
+                                if(issue_book(&issue_root,book_root,temp_student->id,book_id,d1)){
+                                printf("\nBook Issued ...\n"); 
+                                }
+                                else{
+                                    printf("\nBook Not Issued ...\n");
+                                }
+                            }
+                            else if(user_choice == 5){
+                                int book_id;
+                                printf("\nEnter Book Id :");
+                                scanf("%d",&book_id);
+                                if(return_book(&issue_root,temp_student->id,book_id,current_date(),NULL)){
+                                    printf("\nBook Retured Successfully ...\n");
+                                }
+                                else{
+                                    printf("\nReturn Failed ...\n");
+                                }
+                            }
+                            else if (user_choice == 6){
+                                if(!view_issue_book(issue_root,temp_student->id)){
+                                    printf("\nNo Book Issued ...\n");
+                                }
+                            }
+                            else if(user_choice == 7){
+                                printf("\nLogged Out Successfully ...\n");
+                                break;
+                            }
+                            else{
+                                printf("\nInvalid Choice ...\n");
+                            }
                         }
                     }
-                    else if(user_choice == 2){
-                        char search_titl[25];
-                        printf("Enter Title :");
-                        fgets(search_titl, sizeof(search_titl), stdin);
-                        search_titl[strcspn(search_titl, "\n")] = '\0';
-                        if(!search_string(book_root,search_titl)){
-                            printf("\nBook Not Found ...\n");
-                        }
-
-                    }
-                    else if(user_choice == 3){
-                        char search_auth[25];
-                        printf("Enter Author Name :");
-                        fgets(search_auth, sizeof(search_auth), stdin);
-                        search_auth[strcspn(search_auth, "\n")] = '\0';
-                        if(!search_string(book_root,search_auth)){
-                            printf("\nBook Not Found ...\n");
-                        }
-
-                    }
-                    else if(user_choice == 4){
-                        break;
-                    }
-                    else {
-                        printf("Invalid Choice ...");
-                    }
-                }
-                }
-                else if(user_choice == 3){
-
-                }
-                else if(user_choice == 4){
-
-                }
-                if (user_choice == 5)
-                    break;
-            }
-        }
 
         else if (entry_choice == 3) {
             break;
