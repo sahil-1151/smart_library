@@ -20,7 +20,7 @@ struct treenode *createnode(int book_id,const char *title,const char *author, in
 
 struct treenode *insert(struct treenode *root,struct treenode *newnode);
 
-int search_string(struct treenode *root,const char *title);
+int search_string(struct treenode *root,const char *string);
 
 struct treenode *search_id(struct treenode *root,int book_id);
 

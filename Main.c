@@ -122,7 +122,7 @@ int main(void) {
             continue;
         }
         clear_input_buffer();
-
+        
         if (entry_choice == 1) {
             char name[25], email[50], password[25];
 
@@ -200,13 +200,14 @@ int main(void) {
                 }
                 else if(user_choice == 2){
                     while(1){
-                    printf("\n---Searching Choice---\n");
+                    printf("\n--- Searching Choice ---\n");
                     printf("1. Search Id \n");
                     printf("2. Search Title \n");
                     printf("3. Search Author \n");
                     printf("4. Back \n");
                     printf("Enter Choice :");
                     scanf("%d",&user_choice);
+                    clear_input_buffer();
                     if(user_choice == 1){
                         int id;
                         printf("\nEnter Book Id :");
@@ -216,7 +217,7 @@ int main(void) {
                             printf("\nBook Not Found ...\n");
                         }
                         else{
-                            printf("      Book Id     : %d\n",temp->book_id);
+                            printf("\n      Book Id     : %d\n",temp->book_id);
                             printf("      Title       : %s\n",temp->title);
                             printf("      Author      : %s\n",temp->author);
                             printf(" Available Copies : %d\n",temp->available_copies);
@@ -234,7 +235,7 @@ int main(void) {
                     }
                     else if(user_choice == 3){
                         char search_auth[25];
-                        printf("Enter Author :");
+                        printf("Enter Author Name :");
                         fgets(search_auth, sizeof(search_auth), stdin);
                         search_auth[strcspn(search_auth, "\n")] = '\0';
                         if(!search_string(book_root,search_auth)){

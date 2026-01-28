@@ -71,19 +71,19 @@ int case_insensitive_cmp(const char *a, const char *b) {
     return *a == *b;
 }
 
-int search_string(struct treenode *root,const char *title){
+int search_string(struct treenode *root,const char *string){
     if (root == NULL){
         return 0;}
         int found_count=0;
-    if (case_insensitive_cmp(root->title, title)){
-                            printf("      Book Id     : %d\n",root->book_id);
+    if (case_insensitive_cmp(root->title, string) || case_insensitive_cmp(root->author, string)){
+                            printf("\n      Book Id     : %d\n",root->book_id);
                             printf("      Title       : %s\n",root->title);
                             printf("      Author      : %s\n",root->author);
                             printf(" Available Copies : %d\n",root->available_copies);
                             found_count=1;
     }
-    found_count+=search_string(root->left, title);
-    found_count+=search_string(root->right, title);
+    found_count+=search_string(root->left, string);
+    found_count+=search_string(root->right, string);
     return found_count;
 }
 
