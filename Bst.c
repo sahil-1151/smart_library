@@ -1,7 +1,3 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
-#include<ctype.h>
 #include "Bst.h"
 
 struct treenode * createnode(int book_id,const char *title,const char *author,int total_copies){

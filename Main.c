@@ -8,6 +8,7 @@
 #include "Queue.h"
 #include "Linked.h"
 #include "Storage.h"
+#include "Admin.h"
 
 static void clear_input_buffer(void) {
     int c;
@@ -22,19 +23,22 @@ int main(void) {
     struct node     *issue_root = NULL;
     struct queue    *queue_front = NULL;
     struct queue    *queue_rear  = NULL;
+    struct admin    *admin_root  = NULL;
 
     book_root   = load_books();
     user_root   = load_users();
+    admin_root  = load_admin();
     issue_root  = load_issued_books();
     queue_front = load_queue(&queue_rear);
+
 
     int main_choice;
 
     while (1) {
         printf("\n===== LIBRARY SYSTEM =====\n");
         printf("1. Admin\n");
-        printf("2. User\n");
-        printf("3. Exit\n");
+        printf("2. User\n");//done
+        printf("3. Exit\n");//done
         printf("Enter choice: ");
 
         if (scanf("%d", &main_choice) != 1) {
@@ -45,8 +49,77 @@ int main(void) {
         clear_input_buffer();
 
         if (main_choice == 1) {
-            int admin_choice;
+            int entry_choice=0;
+            while (1) {
+            printf("\n--- ADMIN ---\n");
+            printf("1. Register\n");
+            printf("2. Login\n");
+            printf("3. Back\n");
+            printf("Enter choice: ");
+            scanf("%d",&entry_choice);
+            clear_input_buffer();
+            if(entry_choice == 1){
+                char name[50],email[50],password[50],lib[50];
+                printf("Name : ");
+                fgets(name, sizeof(name), stdin);
+                name[strcspn(name, "\n")] = '\0';
 
+                printf("Library Name : ");
+                fgets(lib,sizeof(lib),stdin);
+                lib[strcspn(lib, "\n")] = '\0';
+
+                printf("Email : ");
+                fgets(email,sizeof(email),stdin);
+                email[strcspn(email, "\n")] = '\0';
+
+                if(search_admin_by_email(admin_root,email)){
+                    printf("\nUser Already Exists ...\n");
+                    continue;
+                }
+
+                printf("Password : ");
+                fgets(password,sizeof(password),stdin);
+                password[strcspn(password, "\n")]= '\0';
+
+                struct admin *a = create_admin(name,email,password,lib);
+                if(a == NULL){
+                    printf("\nRegistration Failed ...\n");
+                    continue;
+                }
+                int otp = rand() % 900000 + 100000;
+                int input;
+                sent_otp_email(email, otp);
+
+                printf("Enter OTP: ");
+                scanf("%d", &input);
+                clear_input_buffer();
+
+                if (!verify(otp, input)) {
+                printf("Invalid OTP\n");
+                free(a);
+                continue;
+                            }
+                admin_root=insert_admin(admin_root,a);
+                printf("\nRegistration Successfull ...\n");
+            }
+            else if(entry_choice == 2){
+                char email[50],password[50];
+
+                printf("Email :");
+                fgets(email,sizeof(email),stdin);
+                email[strcspn(email, "\n")] = '\0';
+
+                printf("Password :");
+                fgets(password,sizeof(password),stdin);
+                password[strcspn(password, "\n")]= '\0';
+
+                if(!authenticate_admin(admin_root,email,password)){
+                    printf("\nLogin Failed ...\n ");
+                    continue;
+                }
+                struct admin *temp_admin=search_admin_by_email(admin_root,email);
+                printf("\nLogin successful\n");
+                int admin_choice;
             while (1) {
                 printf("\n--- ADMIN MENU ---\n");
                 printf("1. View all books\n");
@@ -54,6 +127,7 @@ int main(void) {
                 printf("3. Delete book\n");
                 printf("4. Back\n");
                 printf("Enter choice: ");
+                
 
                 if (scanf("%d", &admin_choice) != 1) {
                     clear_input_buffer();
@@ -105,68 +179,76 @@ int main(void) {
                     break;
                 }
             }
-        }
 
+            }
+            else if(entry_choice == 3){
+                break;
+            }
+            else{
+                printf("\nInvalid Input ...\n");
+            }
+        }
+        }
+    
         else if (main_choice == 2) {
-    int entry_choice;
+                    int entry_choice;
+                    while (1) {
+                        printf("\n--- USER ---\n");
+                        printf("1. Register\n");//done
+                        printf("2. Login\n");//done
+                        printf("3. Back\n");//done
+                        printf("Enter choice: ");
 
-    while (1) {
-        printf("\n--- USER ---\n");
-        printf("1. Register\n");//done
-        printf("2. Login\n");//done
-        printf("3. Back\n");//done
-        printf("Enter choice: ");
+                        if (scanf("%d", &entry_choice) != 1) {
+                            clear_input_buffer();
+                            continue;
+                        }
+                        clear_input_buffer();
+                        if (entry_choice == 1) {
+                            char name[25], email[50], password[25];
 
-        if (scanf("%d", &entry_choice) != 1) {
-            clear_input_buffer();
-            continue;
-        }
-        clear_input_buffer();
-        if (entry_choice == 1) {
-            char name[25], email[50], password[25];
+                            printf("Name: ");
+                            fgets(name, sizeof(name), stdin);
+                            name[strcspn(name, "\n")] = '\0';
 
-            printf("Name: ");
-            fgets(name, sizeof(name), stdin);
-            name[strcspn(name, "\n")] = '\0';
+                            printf("Email: ");
+                            fgets(email, sizeof(email), stdin);
+                            email[strcspn(email, "\n")] = '\0';
 
-            printf("Email: ");
-            fgets(email, sizeof(email), stdin);
-            email[strcspn(email, "\n")] = '\0';
+                            if (search_user_by_email(user_root, email)) {
+                                printf("User already exists\n");
+                                continue;
+                            }
 
-            if (search_user_by_email(user_root, email)) {
-                printf("User already exists\n");
-                continue;
-            }
+                            printf("Password: ");
+                            fgets(password, sizeof(password), stdin);
+                            password[strcspn(password, "\n")] = '\0';
 
-            printf("Password: ");
-            fgets(password, sizeof(password), stdin);
-            password[strcspn(password, "\n")] = '\0';
+                            struct student *u = create_user(name, email, password);
+                            if (!u) {
+                                printf("Registration failed\n");
+                                continue;
+                            }
 
-            struct student *u = create_user(name, email, password);
-            if (!u) {
-                printf("Registration failed\n");
-                continue;
-            }
+                            int otp = rand() % 900000 + 100000;
+                            int input;
+                            sent_otp_email(email, otp);
 
-            int otp = rand() % 900000 + 100000;
-            int input;
-            sent_otp_email(email, otp);
+                            printf("Enter OTP: ");
+                            scanf("%d", &input);
+                            clear_input_buffer();
 
-            printf("Enter OTP: ");
-            scanf("%d", &input);
-            clear_input_buffer();
+                            if (!verify(otp, input)) {
+                                printf("Invalid OTP\n");
+                                free(u);
+                                continue;
+                            }
 
-            if (!verify(otp, input)) {
-                printf("Invalid OTP\n");
-                free(u);
-                continue;
-            }
+                            user_root = insert_user(user_root, u);
+                            printf("Registration successful\n");
+                        }
 
-            user_root = insert_user(user_root, u);
-            printf("Registration successful\n");
-        }
-
-        else if (entry_choice == 2) {
+                        else if (entry_choice == 2) {
                         char email[50], password[25];
 
                         printf("Email: ");
@@ -191,7 +273,7 @@ int main(void) {
                             printf("2. View books\n");//done
                             printf("3. Search books\n");//done
                             printf("4. Issue book\n");//done
-                            printf("5. Return book\n");
+                            printf("5. Return book\n");//done
                             printf("6. View Issue Book\n");//done
                             printf("7. Logout\n");
                             printf("Enter Choice: ");
@@ -311,6 +393,7 @@ int main(void) {
             save_users(user_root);
             save_issued_books(issue_root);
             save_queue(queue_front);
+            save_admin(admin_root);
 
             printf("Exit successful\n");
             exit(0);

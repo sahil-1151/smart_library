@@ -1,12 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include "Storage.h"
-#include "Bst.h"
-#include "User.h"
-#include "Linked.h"
-#include "Queue.h"
+
 
 static void save_books_rec(struct treenode *root, FILE *fp) {
     if (!root) return;
@@ -49,6 +42,48 @@ struct treenode *load_books(void) {
         root = insert(root, n);
     }
 
+    fclose(fp);
+    return root;
+}
+
+static void save_admin_rec(struct admin *root,FILE *fp){
+    if(!root) return;
+    fprintf(fp,"%d|%s|%s|%s|%s\n",
+            root->id,
+            root->name,
+            root->lib,
+            root->email,
+            root->password);
+    save_admin_rec(root->left,fp);
+    save_admin_rec(root->right,fp);
+}
+
+void save_admin(struct admin *root){
+    FILE *fp = fopen("admin_login.txt","w");
+    if(!fp) return;
+
+    save_admin_rec(root,fp);
+    fclose(fp);
+}
+
+struct admin *load_admin(void){
+    FILE *fp=fopen("admin_login.txt","w");
+    if(!fp){
+        return NULL;
+    }
+    struct admin *root = NULL;
+    int id;
+    char name[50], email[50], password[50],lib[50];
+
+    while (fscanf(fp, "%d|%49[^|]|%49[^|]|%49[^|]|%49[^\n]",
+                  &id, name, lib, email, password) == 5) {
+
+        struct admin *a = create_admin(name, email, password,lib);
+        if (!a) continue;
+
+        a->id = id;
+        root = insert_admin(root, a);
+    }
     fclose(fp);
     return root;
 }

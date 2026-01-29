@@ -1,7 +1,11 @@
 #ifndef LINKED_H
 #define LINKED_H
-#include "Bst.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
+#include "Bst.h"
+
+
 
 struct queue;
 

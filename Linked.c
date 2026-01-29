@@ -1,5 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include "Linked.h"
 
 static int is_leap_year(int year) {
