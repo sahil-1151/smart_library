@@ -1,5 +1,5 @@
-<<<<<<< HEAD
-Backend in c/
-=======
-/files
->>>>>>> de0384a03c664cd199a17faadee33619e4a86189
+# VS Code
+.vscode/
+
+# Backend folders
+Backend in c++
