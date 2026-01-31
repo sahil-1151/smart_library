@@ -1,0 +1,53 @@
+101|C Programming|Dennis Ritchie|5|2
+102|Data Structures|Mark Weiss|4|1
+103|Operating Systems|Galvin|6|5
+104|Computer Networks|Tanenbaum|3|0
+105|Database Systems|Elmasri|5|4
+106|Algorithms|CLRS|7|5
+107|Discrete Math|Rosen|4|4
+108|Compiler Design|Aho|3|1
+109|Computer Architecture|Hennessy|5|2
+110|Software Engineering|Pressman|6|6
+111|Machine Learning|Tom Mitchell|4|3
+112|Artificial Intelligence|Russell|5|5
+113|Python Basics|Guido|6|3
+114|Java Programming|Gosling|5|1
+115|Web Development|Duckett|4|2
+116|Cyber Security|Stallings|3|0
+117|Cryptography|Kahn Academy|5|5
+118|Linux Internals|Love|4|3
+119|Networking Basics|Kurose|6|4
+120|Cloud Computing|Buyya|5|2
+121|Big Data|Mayer|4|1
+122|Data Mining|Han|6|6
+123|IoT Fundamentals|Bahga|3|2
+124|Embedded Systems|Mazidi|5|3
+125|Digital Electronics|Morris Mano|4|0
+126|Microprocessors|Gaonkar|5|5
+127|Computer Graphics|Hearn|6|4
+128|Image Processing|Gonzalez|4|2
+129|Pattern Recognition|Bishop|5|1
+130|Neural Networks|Haykin|6|6
+131|Deep Learning|Goodfellow|5|4
+132|Statistics|Freedman|4|2
+133|Probability|Ross|6|5
+134|Linear Algebra|Strang|5|3
+135|Numerical Methods|Burden|4|1
+136|Theory of Computation|Sipser|6|6
+137|Automata Theory|Hopcroft|5|4
+138|Unix Programming|Stevens|4|2
+139|Shell Scripting|Blum|3|1
+140|DevOps Basics|Kim|5|5
+141|Agile Development|Beck|4|3
+142|Testing Software|Myers|5|2
+143|Design Patterns|Gamma|6|6
+144|Clean Code|Martin|5|4
+145|Refactoring|Fowler|4|2
+146|Game Development|Rabin|6|3
+147|Android Programming|Meier|5|1
+148|iOS Development|Apple|4|4
+149|Blockchain Basics|Antonopoulos|6|5
+150|Ethical Hacking|EC Council|5|2
+151|test.1|sahil|5|2
+152|test.2|sahil|5|3
+153|test.3|sahil|5|3
