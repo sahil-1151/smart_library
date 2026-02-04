@@ -128,7 +128,8 @@ int main(void) {
                 printf("2. View all books\n");
                 printf("3. Add book\n");
                 printf("4. Delete book\n");
-                printf("5. Back\n");
+                printf("5. Edit Book Information\n");
+                printf("6. Back\n");
                 printf("Enter choice: ");
                 
 
@@ -186,7 +187,53 @@ int main(void) {
                     book_root = deletenode(book_root, id);
                     printf("Delete operation completed\n");
                 }
-                else if (admin_choice == 5) {
+                else if(admin_choice == 5){
+                    int book_id;
+                    printf("\nEditing Book_Id :");
+                    scanf("%d",&book_id);
+                    struct treenode *temp=search_id(book_root,book_id);
+                    if(temp){
+                        int choice;
+                        printf("\n1.Edit Author Name :\n");
+                        printf("2.Edit Title :\n");
+                        printf("3.Edit Available_copies :\n");
+                        printf("4.Edit Total_copies :\n");
+                        printf("\nEnter Your Choice :");
+                        scanf("%d",&choice);
+                        if(choice ==1){
+                            char author[25];
+                            printf("Author: ");
+                            fgets(author, sizeof(author), stdin);
+                            author[strcspn(author, "\n")] = '\0';
+                            edit(temp,author,temp->title,temp->available_copies,temp->total_copies);
+                        }
+                        else if(choice == 2){
+                            char title[25];
+                            printf("Title: ");
+                            fgets(title, sizeof(title), stdin);
+                            title[strcspn(title, "\n")] = '\0';
+                            edit(temp,temp->author,title,temp->available_copies,temp->total_copies);
+                        }
+                        else if(choice == 3){
+                            int avail_copies;
+                            printf("Available Copies :");
+                            scanf("%d",&avail_copies);
+                            edit(temp,temp->author,temp->title,avail_copies,temp->total_copies);
+
+                        }
+                        else if(choice == 4){
+                            int total_copies;
+                            printf("Total Copies :");
+                            scanf("%d",&total_copies);
+                            edit(temp,temp->author,temp->title,temp->available_copies,total_copies);
+                        }
+                        else{
+                            printf("Invalid choice ");
+                        }
+                    }
+
+                }
+                else if (admin_choice == 6) {
                     break;
                 }
             }

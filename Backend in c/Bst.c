@@ -10,6 +10,7 @@ struct treenode * createnode(int book_id,const char *lib,const char *title,const
     strncpy(newnode->title, title, sizeof(newnode->title) - 1);
     newnode->title[sizeof(newnode->title) - 1] = '\0';
     strncpy(newnode->lib,lib,sizeof(newnode->lib) -1);
+    newnode->lib[sizeof(newnode->lib) - 1] = '\0';
     strncpy(newnode->author, author, sizeof(newnode->author) - 1);
     newnode->author[sizeof(newnode->author) - 1] = '\0';
     newnode->total_copies=total_copies;
@@ -42,6 +43,15 @@ struct treenode *insert(struct treenode *root,struct treenode *newnode){
         root->right=insert(root->right,newnode);
     }
     return root;
+}
+
+void edit(struct treenode *newnode,const char *author,const char *title,int available_copies,int total_copies){
+   strncpy(newnode->title, title, sizeof(newnode->title) - 1);
+    newnode->title[sizeof(newnode->title) - 1] = '\0';
+    strncpy(newnode->author, author, sizeof(newnode->author) - 1);
+    newnode->author[sizeof(newnode->author) - 1] = '\0';
+    newnode->total_copies=total_copies;
+    newnode->available_copies=total_copies;
 }
 
 struct treenode *search_id(struct treenode *root,int book_id){

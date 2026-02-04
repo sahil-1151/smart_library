@@ -31,6 +31,8 @@ struct treenode *search_id(struct treenode *root,int book_id);
 
 struct treenode *deletenode(struct treenode *root,int book_id);
 
+void edit(struct treenode *root,const char *author,const char *title,int available_copies,int total_copies);
+
 struct treenode *findmin(struct treenode *root);
 
 void inorder(struct treenode *root);
