@@ -24,6 +24,7 @@ int main(void) {
     struct queue    *queue_front = NULL;
     struct queue    *queue_rear  = NULL;
     struct admin    *admin_root  = NULL;
+    struct lib      *lib_root    = NULL;
 
     book_root   = load_books();
     user_root   = load_users();
@@ -35,7 +36,7 @@ int main(void) {
     int main_choice;
 
     while (1) {
-        printf("\n===== LIBRARY SYSTEM =====\n");
+        printf("\n===== LIBRARY RESERVATION SYSTEM =====\n");
         printf("1. Admin\n");
         printf("2. User\n");//done
         printf("3. Exit\n");//done
@@ -43,7 +44,7 @@ int main(void) {
 
         if (scanf("%d", &main_choice) != 1) {
             clear_input_buffer();
-            printf("Invalid input\n");
+            printf("\nInvalid input\n");
             continue;
         }
         clear_input_buffer();
@@ -101,15 +102,16 @@ int main(void) {
                             }
                 admin_root=insert_admin(admin_root,a);
                 printf("\nRegistration Successfull ...\n");
+                save_admin(admin_root);
             }
             else if(entry_choice == 2){
                 char email[50],password[50];
 
-                printf("Email :");
+                printf("Email : ");
                 fgets(email,sizeof(email),stdin);
                 email[strcspn(email, "\n")] = '\0';
 
-                printf("Password :");
+                printf("Password : ");
                 fgets(password,sizeof(password),stdin);
                 password[strcspn(password, "\n")]= '\0';
 
@@ -122,10 +124,11 @@ int main(void) {
                 int admin_choice;
             while (1) {
                 printf("\n--- ADMIN MENU ---\n");
-                printf("1. View all books\n");
-                printf("2. Add book\n");
-                printf("3. Delete book\n");
-                printf("4. Back\n");
+                printf("1. View Admin Information\n");
+                printf("2. View all books\n");
+                printf("3. Add book\n");
+                printf("4. Delete book\n");
+                printf("5. Back\n");
                 printf("Enter choice: ");
                 
 
@@ -135,10 +138,17 @@ int main(void) {
                 }
                 clear_input_buffer();
 
-                if (admin_choice == 1) {
-                    inorder(book_root);
+                if(admin_choice == 1){
+                    printf("\nLibarian Name : %s\n",temp_admin->name);
+                    printf("Library Name  : %s\n",temp_admin->lib);
+                    printf("Libarian Id   : %d\n",temp_admin->id);
+                    printf("    Email     : %s\n",temp_admin->email);
                 }
-                else if (admin_choice == 2) {
+
+                if (admin_choice == 2) {
+                    visit_lib(book_root,temp_admin->lib);
+                }
+                else if (admin_choice == 3) {
                     int id, total;
                     char title[25], author[20];
 
@@ -159,14 +169,15 @@ int main(void) {
                     clear_input_buffer();
 
                     struct treenode *node =
-                        createnode(id, title, author, total);
+                        createnode(id, admin_root->lib , title, author, total);
 
                     if (node)
                         book_root = insert(book_root, node);
 
                     printf("Book added successfully\n");
+                    save_books(book_root);
                 }
-                else if (admin_choice == 3) {
+                else if (admin_choice == 4) {
                     int id;
                     printf("Enter book ID to delete: ");
                     scanf("%d", &id);
@@ -175,7 +186,7 @@ int main(void) {
                     book_root = deletenode(book_root, id);
                     printf("Delete operation completed\n");
                 }
-                else if (admin_choice == 4) {
+                else if (admin_choice == 5) {
                     break;
                 }
             }
@@ -264,7 +275,8 @@ int main(void) {
                             continue;
                         }
                         struct student *temp_student=search_user_by_email(user_root,email);
-                        printf("Login successful\n");
+                        printf("\nLogin successful ...\n");
+                        save_users(user_root);
 
                         while (1) {
                             int user_choice;
@@ -284,7 +296,7 @@ int main(void) {
                                 printf("\nStudent id : %d\n",temp_student->id);
                             }
                             else if (user_choice == 2){
-                                view(book_root);
+                                inorder(book_root);
                             }
 
                             else if(user_choice == 3){
@@ -399,6 +411,6 @@ int main(void) {
             exit(0);
         }
     }
-
+ 
     return 0;
 }

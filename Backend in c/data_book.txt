@@ -1,0 +1,323 @@
+1001|IIT Bombay Library|Advanced Algorithms in J|Herbert Schildt|12|8
+1002|Delhi University Library|Mastering Data Structure|Bjarne Stroustrup|15|12
+1003|NIT Trichy Library|Introduction to Machine |Yashavant Kanetkar|6|2
+1004|JNU Knowledge Centre|Programming with Cloud C|E Balagurusamy|10|10
+1005|GEU Central Library|Fundamentals of Cyber Se|Brian Kernighan|14|7
+1006|IIT Bombay Library|The Art of Operating Sys|Andrew Tanenbaum|9|4
+1007|Delhi University Library|Practical Web Developmen|Donald Knuth|11|9
+1008|NIT Trichy Library|Object-Oriented Big Data|Robert Lafore|7|3
+1009|JNU Knowledge Centre|Essential Compiler Desig|Mark Allen Weiss|13|11
+1010|GEU Central Library|Modern Blockchain in Rus|Cormen|5|5
+1011|IIT Bombay Library|Hands-On Artificial Inte|Silberschatz|16|10
+1012|Delhi University Library|Guide to Computer Networ|Galvin|8|1
+1013|NIT Trichy Library|Complete IoT in JavaScri|Joshua Bloch|12|6
+1014|JNU Knowledge Centre|Principles of Embedded S|Martin Fowler|10|8
+1015|GEU Central Library|Real-World Mobile Comput|Eric Gamma|14|14
+1016|IIT Bombay Library|Expert Software Engineer|Ian Sommerville|9|5
+1017|Delhi University Library|Beginning Computer Graph|Pressman|11|3
+1018|NIT Trichy Library|Professional Rust|Grady Booch|7|4
+1019|JNU Knowledge Centre|Advanced Go in Python|Bertrand Meyer|15|9
+1020|GEU Central Library|Learning Database System|Scott Meyers|13|7
+1021|IIT Bombay Library|Mastering C++|Dennis Ritchie|6|0
+1022|Delhi University Library|Introduction to Algorith|Bjarne Stroustrup|10|5
+1023|NIT Trichy Library|Fundamentals of Java|Yashavant Kanetkar|12|12
+1024|JNU Knowledge Centre|Programming with Machine|E Balagurusamy|8|6
+1025|GEU Central Library|The Art of Cloud Computi|Herbert Schildt|14|11
+1026|IIT Bombay Library|Practical Cyber Security|Brian Kernighan|9|2
+1027|Delhi University Library|Object-Oriented Operatin|Andrew Tanenbaum|11|8
+1028|NIT Trichy Library|Essential Big Data|Donald Knuth|15|13
+1029|JNU Knowledge Centre|Modern IoT in C|Robert Lafore|7|7
+1030|GEU Central Library|Hands-On Compiler Design|Mark Allen Weiss|13|10
+1031|IIT Bombay Library|Guide to Embedded System|Cormen|5|1
+1032|Delhi University Library|Complete Computer Archit|Silberschatz|16|9
+1033|NIT Trichy Library|Principles of Mobile Com|Galvin|10|4
+1034|JNU Knowledge Centre|Real-World Blockchain|Joshua Bloch|12|12
+1035|GEU Central Library|Expert Web Development|Martin Fowler|8|5
+1036|IIT Bombay Library|Beginning Artificial Int|Eric Gamma|14|14
+1037|Delhi University Library|Professional Data Struct|Ian Sommerville|9|3
+1038|NIT Trichy Library|Advanced Software Engine|Pressman|11|7
+1039|JNU Knowledge Centre|Learning Rust in JavaScr|Grady Booch|15|8
+1040|GEU Central Library|Mastering Go|Bertrand Meyer|6|4
+1041|IIT Bombay Library|Introduction to Computer|Scott Meyers|13|11
+1042|Delhi University Library|Fundamentals of C|Dennis Ritchie|10|2
+1043|NIT Trichy Library|Programming with Algorit|Bjarne Stroustrup|12|9
+1044|JNU Knowledge Centre|The Art of Database Syst|Yashavant Kanetkar|8|8
+1045|GEU Central Library|Practical Operating Syst|E Balagurusamy|14|6
+1046|IIT Bombay Library|Object-Oriented Cyber Se|Herbert Schildt|9|0
+1047|Delhi University Library|Essential Machine Learni|Brian Kernighan|11|5
+1048|NIT Trichy Library|Modern Cloud Computing|Andrew Tanenbaum|15|12
+1049|JNU Knowledge Centre|Hands-On Big Data in Pyt|Donald Knuth|7|3
+1050|GEU Central Library|Guide to IoT|Robert Lafore|13|13
+1051|IIT Bombay Library|Complete Compiler Design|Mark Allen Weiss|5|2
+1052|Delhi University Library|Principles of Embedded S|Cormen|16|10
+1053|NIT Trichy Library|Real-World Mobile Comput|Silberschatz|10|7
+1054|JNU Knowledge Centre|Expert Blockchain|Galvin|12|4
+1055|GEU Central Library|Beginning Web Developmen|Joshua Bloch|8|8
+1056|IIT Bombay Library|Professional Artificial|Martin Fowler|14|11
+1057|Delhi University Library|Advanced Data Structure|Eric Gamma|9|6
+1058|NIT Trichy Library|Learning Software Engine|Ian Sommerville|11|1
+1059|JNU Knowledge Centre|Mastering Computer Graph|Pressman|15|9
+1060|GEU Central Library|Introduction to Rust|Grady Booch|6|5
+1061|IIT Bombay Library|Fundamentals of Go|Bertrand Meyer|13|8
+1062|Delhi University Library|Programming with C++|Scott Meyers|10|3
+1063|NIT Trichy Library|The Art of Java|Dennis Ritchie|12|10
+1064|JNU Knowledge Centre|Practical Python|Bjarne Stroustrup|8|4
+1065|GEU Central Library|Object-Oriented Algorith|Yashavant Kanetkar|14|14
+1066|IIT Bombay Library|Essential Database System|E Balagurusamy|9|7
+1067|Delhi University Library|Modern Operating Systems|Herbert Schildt|11|5
+1068|NIT Trichy Library|Hands-On Cyber Security|Brian Kernighan|15|11
+1069|JNU Knowledge Centre|Guide to Machine Learnin|Andrew Tanenbaum|7|2
+1070|GEU Central Library|Complete Cloud Computing|Donald Knuth|13|6
+1071|IIT Bombay Library|Principles of Big Data|Robert Lafore|5|0
+1072|Delhi University Library|Real-World IoT|Mark Allen Weiss|16|13
+1073|NIT Trichy Library|Expert Compiler Design|Cormen|10|9
+1074|JNU Knowledge Centre|Beginning Embedded Syste|Silberschatz|12|8
+1075|GEU Central Library|Professional Mobile Comp|Galvin|8|3
+1076|IIT Bombay Library|Advanced Blockchain|Joshua Bloch|14|10
+1077|Delhi University Library|Learning Web Development|Martin Fowler|9|9
+1078|NIT Trichy Library|Mastering Artificial Int|Eric Gamma|11|4
+1079|JNU Knowledge Centre|Introduction to Data Str|Ian Sommerville|15|15
+1080|GEU Central Library|Fundamentals of Software|Pressman|6|1
+1081|IIT Bombay Library|Programming with Compute|Grady Booch|13|7
+1082|Delhi University Library|The Art of Rust|Bertrand Meyer|10|6
+1083|NIT Trichy Library|Practical Go in C|Scott Meyers|12|12
+1084|JNU Knowledge Centre|Object-Oriented C++|Dennis Ritchie|8|5
+1085|GEU Central Library|Essential Java|Bjarne Stroustrup|14|8
+1086|IIT Bombay Library|Modern Python|Yashavant Kanetkar|9|2
+1087|Delhi University Library|Hands-On Algorithms|E Balagurusamy|11|11
+1088|NIT Trichy Library|Guide to Database System|Herbert Schildt|15|9
+1089|JNU Knowledge Centre|Complete Operating Syste|Brian Kernighan|7|4
+1090|GEU Central Library|Principles of Cyber Secu|Andrew Tanenbaum|13|10
+1091|IIT Bombay Library|Real-World Machine Learn|Donald Knuth|5|3
+1092|Delhi University Library|Expert Cloud Computing|Robert Lafore|16|12
+1093|NIT Trichy Library|Beginning Big Data|Mark Allen Weiss|10|5
+1094|JNU Knowledge Centre|Professional IoT|Cormen|12|7
+1095|GEU Central Library|Advanced Compiler Design|Silberschatz|8|1
+1096|IIT Bombay Library|Learning Embedded System|Galvin|14|14
+1097|Delhi University Library|Mastering Mobile Computi|Joshua Bloch|9|6
+1098|NIT Trichy Library|Introduction to Blockcha|Martin Fowler|11|8
+1099|JNU Knowledge Centre|Fundamentals of Web Deve|Eric Gamma|15|11
+1100|GEU Central Library|Programming with Artific|Ian Sommerville|6|4
+1101|IIT Bombay Library|The Art of Data Structur|Pressman|13|13
+1102|Delhi University Library|Practical Software Engin|Grady Booch|10|2
+1103|NIT Trichy Library|Object-Oriented Computer|Bertrand Meyer|12|9
+1104|JNU Knowledge Centre|Essential Rust|Scott Meyers|8|0
+1105|GEU Central Library|Modern Go|Dennis Ritchie|14|7
+1106|IIT Bombay Library|Hands-On C++|Bjarne Stroustrup|9|5
+1107|Delhi University Library|Guide to Java|Yashavant Kanetkar|11|3
+1108|NIT Trichy Library|Complete Python|E Balagurusamy|15|12
+1109|JNU Knowledge Centre|Principles of Algorithms|Herbert Schildt|7|6
+1110|GEU Central Library|Real-World Database Syst|Brian Kernighan|13|10
+1111|IIT Bombay Library|Expert Operating Systems|Andrew Tanenbaum|5|4
+1112|Delhi University Library|Beginning Cyber Security|Donald Knuth|16|8
+1113|NIT Trichy Library|Professional Machine Lea|Robert Lafore|10|1
+1114|JNU Knowledge Centre|Advanced Cloud Computing|Mark Allen Weiss|12|11
+1115|GEU Central Library|Learning Big Data|Cormen|8|5
+1116|IIT Bombay Library|Mastering IoT|Silberschatz|14|9
+1117|Delhi University Library|Introduction to Compiler|Galvin|9|7
+1118|NIT Trichy Library|Fundamentals of Embedded|Joshua Bloch|11|4
+1119|JNU Knowledge Centre|Programming with Mobile|Martin Fowler|15|15
+1120|GEU Central Library|The Art of Blockchain|Eric Gamma|6|2
+1121|IIT Bombay Library|Practical Web Development|Ian Sommerville|13|6
+1122|Delhi University Library|Object-Oriented Artifici|Pressman|10|8
+1123|NIT Trichy Library|Essential Data Structure|Grady Booch|12|3
+1124|JNU Knowledge Centre|Modern Software Engineer|Bertrand Meyer|8|0
+1125|GEU Central Library|Hands-On Computer Graphi|Scott Meyers|14|13
+1126|IIT Bombay Library|Guide to Rust|Dennis Ritchie|9|9
+1127|Delhi University Library|Complete Go in Java|Bjarne Stroustrup|11|5
+1128|NIT Trichy Library|Principles of C++|Yashavant Kanetkar|15|10
+1129|JNU Knowledge Centre|Real-World Java|E Balagurusamy|7|3
+1130|GEU Central Library|Expert Python|Herbert Schildt|13|7
+1131|IIT Bombay Library|Beginning Algorithms|Brian Kernighan|5|1
+1132|Delhi University Library|Professional Database Sy|Andrew Tanenbaum|16|12
+1133|NIT Trichy Library|Advanced Operating Syste|Donald Knuth|10|6
+1134|JNU Knowledge Centre|Learning Cyber Security|Robert Lafore|12|9
+1135|GEU Central Library|Mastering Machine Learni|Mark Allen Weiss|8|4
+1136|IIT Bombay Library|Introduction to Cloud Co|Cormen|14|11
+1137|Delhi University Library|Fundamentals of Big Data|Silberschatz|9|8
+1138|NIT Trichy Library|Programming with IoT|Galvin|11|2
+1139|JNU Knowledge Centre|The Art of Compiler Desi|Joshua Bloch|15|13
+1140|GEU Central Library|Practical Embedded Syste|Martin Fowler|6|5
+1141|IIT Bombay Library|Object-Oriented Mobile C|Eric Gamma|13|10
+1142|Delhi University Library|Essential Blockchain|Ian Sommerville|10|4
+1143|NIT Trichy Library|Modern Web Development|Pressman|12|7
+1144|JNU Knowledge Centre|Hands-On Artificial Inte|Grady Booch|8|3
+1145|GEU Central Library|Guide to Data Structures|Bertrand Meyer|14|14
+1146|IIT Bombay Library|Complete Software Engine|Scott Meyers|9|6
+1147|Delhi University Library|Principles of Computer G|Dennis Ritchie|11|1
+1148|NIT Trichy Library|Real-World Rust|Bjarne Stroustrup|15|9
+1149|JNU Knowledge Centre|Expert Go|Yashavant Kanetkar|7|7
+1150|GEU Central Library|Beginning C++|E Balagurusamy|13|11
+1151|IIT Bombay Library|Advanced Java|Herbert Schildt|5|0
+1152|Delhi University Library|Learning Python|Brian Kernighan|16|8
+1153|NIT Trichy Library|Mastering Algorithms|Andrew Tanenbaum|10|5
+1154|JNU Knowledge Centre|Introduction to Database|Donald Knuth|12|12
+1155|GEU Central Library|Fundamentals of Operatin|Robert Lafore|8|2
+1156|IIT Bombay Library|Programming with Cyber S|Mark Allen Weiss|14|9
+1157|Delhi University Library|The Art of Machine Learn|Cormen|9|4
+1158|NIT Trichy Library|Practical Cloud Computin|Silberschatz|11|6
+1159|JNU Knowledge Centre|Object-Oriented Big Data|Galvin|15|10
+1160|GEU Central Library|Essential IoT|Joshua Bloch|6|3
+1161|IIT Bombay Library|Modern Compiler Design|Martin Fowler|13|13
+1162|Delhi University Library|Hands-On Embedded System|Eric Gamma|10|7
+1163|NIT Trichy Library|Guide to Mobile Computin|Ian Sommerville|12|5
+1164|JNU Knowledge Centre|Complete Blockchain|Pressman|8|1
+1165|GEU Central Library|Principles of Web Develo|Grady Booch|14|11
+1166|IIT Bombay Library|Real-World Artificial In|Bertrand Meyer|9|8
+1167|Delhi University Library|Expert Data Structures|Scott Meyers|11|4
+1168|NIT Trichy Library|Beginning Software Engin|Dennis Ritchie|15|12
+1169|JNU Knowledge Centre|Professional Computer Gr|Bjarne Stroustrup|7|6
+1170|GEU Central Library|Advanced Rust|Yashavant Kanetkar|13|9
+1171|IIT Bombay Library|Learning Go|E Balagurusamy|5|2
+1172|Delhi University Library|Mastering C++|Herbert Schildt|16|14
+1173|NIT Trichy Library|Introduction to Java|Brian Kernighan|10|3
+1174|JNU Knowledge Centre|Fundamentals of Python|Andrew Tanenbaum|12|10
+1175|GEU Central Library|Programming with Algorit|Donald Knuth|8|5
+1176|IIT Bombay Library|The Art of Database Syst|Robert Lafore|14|7
+1177|Delhi University Library|Practical Operating Syst|Mark Allen Weiss|9|0
+1178|NIT Trichy Library|Object-Oriented Cyber Se|Cormen|11|8
+1179|JNU Knowledge Centre|Essential Machine Learni|Silberschatz|15|11
+1180|GEU Central Library|Modern Cloud Computing|Galvin|6|4
+1181|IIT Bombay Library|Hands-On Big Data|Joshua Bloch|13|6
+1182|Delhi University Library|Guide to IoT|Martin Fowler|10|9
+1183|NIT Trichy Library|Complete Compiler Design|Eric Gamma|12|2
+1184|JNU Knowledge Centre|Principles of Embedded S|Ian Sommerville|8|7
+1185|GEU Central Library|Real-World Mobile Comput|Pressman|14|10
+1186|IIT Bombay Library|Expert Blockchain|Grady Booch|9|5
+1187|Delhi University Library|Beginning Web Developmen|Bertrand Meyer|11|3
+1188|NIT Trichy Library|Professional Artificial|Scott Meyers|15|13
+1189|JNU Knowledge Centre|Advanced Data Structure|Dennis Ritchie|7|1
+1190|GEU Central Library|Learning Software Engine|Bjarne Stroustrup|13|12
+1191|IIT Bombay Library|Mastering Computer Graph|Yashavant Kanetkar|5|4
+1192|Delhi University Library|Introduction to Rust|E Balagurusamy|16|8
+1193|NIT Trichy Library|Fundamentals of Go|Herbert Schildt|10|6
+1194|JNU Knowledge Centre|Programming with C++|Brian Kernighan|12|5
+1195|GEU Central Library|The Art of Java|Andrew Tanenbaum|8|3
+1196|IIT Bombay Library|Practical Python|Donald Knuth|14|11
+1197|Delhi University Library|Object-Oriented Algorith|Robert Lafore|9|9
+1198|NIT Trichy Library|Essential Database System|Mark Allen Weiss|11|7
+1199|JNU Knowledge Centre|Modern Operating Systems|Cormen|15|10
+1200|GEU Central Library|Hands-On Cyber Security|Silberschatz|6|2
+1201|IIT Bombay Library|Guide to Machine Learnin|Galvin|13|8
+1202|Delhi University Library|Complete Cloud Computing|Joshua Bloch|10|4
+1203|NIT Trichy Library|Principles of Big Data|Martin Fowler|12|12
+1204|JNU Knowledge Centre|Real-World IoT|Eric Gamma|8|6
+1205|GEU Central Library|Expert Compiler Design|Ian Sommerville|14|9
+1206|IIT Bombay Library|Beginning Embedded Syste|Pressman|9|1
+1207|Delhi University Library|Professional Mobile Comp|Grady Booch|11|5
+1208|NIT Trichy Library|Advanced Blockchain|Bertrand Meyer|15|14
+1209|JNU Knowledge Centre|Learning Web Development|Scott Meyers|7|3
+1210|GEU Central Library|Mastering Artificial Int|Dennis Ritchie|13|10
+1211|IIT Bombay Library|Introduction to Data Str|Bjarne Stroustrup|5|0
+1212|Delhi University Library|Fundamentals of Software|Yashavant Kanetkar|16|13
+1213|NIT Trichy Library|Programming with Compute|E Balagurusamy|10|7
+1214|JNU Knowledge Centre|The Art of Rust|Herbert Schildt|12|4
+1215|GEU Central Library|Practical Go|Brian Kernighan|8|8
+1216|IIT Bombay Library|Object-Oriented C++|Andrew Tanenbaum|14|11
+1217|Delhi University Library|Essential Java|Donald Knuth|9|5
+1218|NIT Trichy Library|Modern Python|Robert Lafore|11|2
+1219|JNU Knowledge Centre|Hands-On Algorithms|Mark Allen Weiss|15|12
+1220|GEU Central Library|Guide to Database System|Cormen|6|3
+1221|IIT Bombay Library|Complete Operating Syste|Silberschatz|13|9
+1222|Delhi University Library|Principles of Cyber Secu|Galvin|10|6
+1223|NIT Trichy Library|Real-World Machine Learn|Joshua Bloch|12|1
+1224|JNU Knowledge Centre|Expert Cloud Computing|Martin Fowler|8|5
+1225|GEU Central Library|Beginning Big Data|Eric Gamma|14|10
+1226|IIT Bombay Library|Professional IoT|Ian Sommerville|9|4
+1227|Delhi University Library|Advanced Compiler Design|Pressman|11|8
+1228|NIT Trichy Library|Learning Embedded System|Grady Booch|15|11
+1229|JNU Knowledge Centre|Mastering Mobile Computi|Bertrand Meyer|7|6
+1230|GEU Central Library|Introduction to Blockcha|Scott Meyers|13|7
+1231|IIT Bombay Library|Fundamentals of Web Deve|Dennis Ritchie|5|2
+1232|Delhi University Library|Programming with Artific|Bjarne Stroustrup|16|12
+1233|NIT Trichy Library|The Art of Data Structur|Yashavant Kanetkar|10|9
+1234|JNU Knowledge Centre|Practical Software Engin|E Balagurusamy|12|3
+1235|GEU Central Library|Object-Oriented Computer|Herbert Schildt|8|0
+1236|IIT Bombay Library|Essential Rust|Brian Kernighan|14|13
+1237|Delhi University Library|Modern Go|Andrew Tanenbaum|9|7
+1238|NIT Trichy Library|Hands-On C++|Donald Knuth|11|5
+1239|JNU Knowledge Centre|Guide to Java|Robert Lafore|15|10
+1240|GEU Central Library|Complete Python|Mark Allen Weiss|6|4
+1241|IIT Bombay Library|Principles of Algorithms|Cormen|13|11
+1242|Delhi University Library|Real-World Database Syst|Silberschatz|10|8
+1243|NIT Trichy Library|Expert Operating Systems|Galvin|12|6
+1244|JNU Knowledge Centre|Beginning Cyber Security|Joshua Bloch|8|2
+1245|GEU Central Library|Professional Machine Lea|Martin Fowler|14|9
+1246|IIT Bombay Library|Advanced Cloud Computing|Eric Gamma|9|3
+1247|Delhi University Library|Learning Big Data|Ian Sommerville|11|1
+1248|NIT Trichy Library|Mastering IoT|Pressman|15|14
+1249|JNU Knowledge Centre|Introduction to Compiler|Grady Booch|7|5
+1250|GEU Central Library|Fundamentals of Embedded|Bertrand Meyer|13|10
+1251|IIT Bombay Library|Programming with Mobile |Scott Meyers|5|4
+1252|Delhi University Library|The Art of Blockchain|Dennis Ritchie|16|12
+1253|NIT Trichy Library|Practical Web Development|Bjarne Stroustrup|10|7
+1254|JNU Knowledge Centre|Object-Oriented Artifici|Yashavant Kanetkar|12|9
+1255|GEU Central Library|Essential Data Structure|E Balagurusamy|8|6
+1256|IIT Bombay Library|Modern Software Engineer|Herbert Schildt|14|11
+1257|Delhi University Library|Hands-On Computer Graphi|Brian Kernighan|9|4
+1258|NIT Trichy Library|Guide to Rust|Andrew Tanenbaum|11|8
+1259|JNU Knowledge Centre|Complete Go|Donald Knuth|15|13
+1260|GEU Central Library|Principles of C++|Robert Lafore|6|1
+1261|IIT Bombay Library|Real-World Java|Mark Allen Weiss|13|9
+1262|Delhi University Library|Expert Python|Cormen|10|5
+1263|NIT Trichy Library|Beginning Algorithms|Silberschatz|12|3
+1264|JNU Knowledge Centre|Professional Database Sy|Galvin|8|0
+1265|GEU Central Library|Advanced Operating Syste|Joshua Bloch|14|10
+1266|IIT Bombay Library|Learning Cyber Security|Martin Fowler|9|7
+1267|Delhi University Library|Mastering Machine Learni|Eric Gamma|11|6
+1268|NIT Trichy Library|Introduction to Cloud Co|Ian Sommerville|15|12
+1269|JNU Knowledge Centre|Fundamentals of Big Data|Pressman|7|4
+1270|GEU Central Library|Programming with IoT|Grady Booch|13|8
+1271|IIT Bombay Library|The Art of Compiler Desi|Bertrand Meyer|5|3
+1272|Delhi University Library|Practical Embedded Syste|Scott Meyers|16|11
+1273|NIT Trichy Library|Object-Oriented Mobile C|Dennis Ritchie|10|2
+1274|JNU Knowledge Centre|Essential Blockchain|Bjarne Stroustrup|12|10
+1275|GEU Central Library|Modern Web Development|Yashavant Kanetkar|8|5
+1276|IIT Bombay Library|Hands-On Artificial Inte|E Balagurusamy|14|14
+1277|Delhi University Library|Guide to Data Structures|Herbert Schildt|9|8
+1278|NIT Trichy Library|Complete Software Engine|Brian Kernighan|11|4
+1279|JNU Knowledge Centre|Principles of Computer G|Andrew Tanenbaum|15|9
+1280|GEU Central Library|Real-World Rust|Donald Knuth|6|1
+1281|IIT Bombay Library|Expert Go|Robert Lafore|13|7
+1282|Delhi University Library|Beginning C++|Mark Allen Weiss|10|6
+1283|NIT Trichy Library|Advanced Java|Cormen|12|12
+1284|JNU Knowledge Centre|Learning Python|Silberschatz|8|3
+1285|GEU Central Library|Mastering Algorithms|Galvin|14|10
+1286|IIT Bombay Library|Introduction to Database|Joshua Bloch|9|5
+1287|Delhi University Library|Fundamentals of Operatin|Martin Fowler|11|2
+1288|NIT Trichy Library|Programming with Cyber S|Eric Gamma|15|11
+1289|JNU Knowledge Centre|The Art of Machine Learn|Ian Sommerville|7|7
+1290|GEU Central Library|Practical Cloud Computin|Pressman|13|13
+1291|IIT Bombay Library|Object-Oriented Big Data|Grady Booch|5|0
+1292|Delhi University Library|Essential IoT|Bertrand Meyer|16|9
+1293|NIT Trichy Library|Modern Compiler Design|Scott Meyers|10|8
+1294|JNU Knowledge Centre|Hands-On Embedded System|Dennis Ritchie|12|4
+1295|GEU Central Library|Guide to Mobile Computin|Bjarne Stroustrup|8|6
+1296|IIT Bombay Library|Complete Blockchain|Yashavant Kanetkar|14|12
+1297|Delhi University Library|Principles of Web Develo|E Balagurusamy|9|3
+1298|NIT Trichy Library|Real-World Artificial In|Herbert Schildt|11|9
+1299|JNU Knowledge Centre|Expert Data Structures|Brian Kernighan|15|10
+1300|GEU Central Library|Beginning Software Engin|Andrew Tanenbaum|6|5
+1301|IIT Bombay Library|Professional Computer Gr|Donald Knuth|13|11
+1302|Delhi University Library|Advanced Rust|Robert Lafore|10|7
+1303|NIT Trichy Library|Learning Go|Mark Allen Weiss|12|1
+1304|JNU Knowledge Centre|Mastering C++|Cormen|8|4
+1305|GEU Central Library|Introduction to Java|Silberschatz|14|8
+1306|IIT Bombay Library|Fundamentals of Python|Galvin|9|2
+1307|Delhi University Library|Programming with Algorit|Joshua Bloch|11|6
+1308|NIT Trichy Library|The Art of Database Syst|Martin Fowler|15|14
+1309|JNU Knowledge Centre|Practical Operating Syst|Eric Gamma|7|3
+1310|GEU Central Library|Object-Oriented Cyber Se|Ian Sommerville|13|10
+1311|IIT Bombay Library|Essential Machine Learni|Pressman|5|1
+1312|Delhi University Library|Modern Cloud Computing|Grady Booch|16|13
+1313|NIT Trichy Library|Hands-On Big Data|Bertrand Meyer|10|5
+1314|JNU Knowledge Centre|Guide to IoT|Scott Meyers|12|9
+1315|GEU Central Library|Complete Compiler Design|Dennis Ritchie|8|7
+1316|IIT Bombay Library|Principles of Embedded S|Bjarne Stroustrup|14|11
+1317|Delhi University Library|Real-World Mobile Comput|Yashavant Kanetkar|9|4
+1318|NIT Trichy Library|Expert Blockchain|E Balagurusamy|11|8
+1319|JNU Knowledge Centre|Beginning Web Developmen|Herbert Schildt|15|12
+1321|IIT Bombay Library|Advanced Data Structure|Andrew Tanenbaum|13|6
+1322|Delhi University Library|Learning Software Engine|Donald Knuth|10|3
+1323|NIT Trichy Library|Mastering Computer Graph|Robert Lafore|12|10
+1324|JNU Knowledge Centre|Introduction to Rust|Mark Allen Weiss|8|5

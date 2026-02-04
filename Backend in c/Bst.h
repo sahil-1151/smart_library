@@ -8,8 +8,9 @@
 
 struct treenode {
 int book_id;
-    char title[25];
-    char author[20];
+    char title[50];
+    char author[50];
+    char lib[50];
     int total_copies;
     int available_copies;
     struct treenode *left;
@@ -20,7 +21,7 @@ void view(struct treenode *root);
 
 int case_insensitive_cmp(const char *a, const char *b);
 
-struct treenode *createnode(int book_id,const char *title,const char *author, int total_copies);
+struct treenode *createnode(int book_id,const char *lib,const char *title,const char *author, int total_copies);
 
 struct treenode *insert(struct treenode *root,struct treenode *newnode);
 
@@ -35,6 +36,8 @@ struct treenode *findmin(struct treenode *root);
 void inorder(struct treenode *root);
 
 void visit(struct treenode *node);
+
+void visit_lib(struct treenode *node,const char *lib);
 
 void free_bst(struct treenode *root);
 

@@ -1,6 +1,5 @@
 #include "User.h"
 
-
 int verify(int otp, int input) {
     return otp == input;
 }

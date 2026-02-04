@@ -4,8 +4,9 @@
 static void save_books_rec(struct treenode *root, FILE *fp) {
     if (!root) return;
 
-    fprintf(fp, "%d|%s|%s|%d|%d\n",
+    fprintf(fp, "%d|%s|%s|%s|%d|%d\n",
             root->book_id,
+            root->lib,
             root->title,
             root->author,
             root->total_copies,
@@ -29,13 +30,13 @@ struct treenode *load_books(void) {
 
     struct treenode *root = NULL;
     int id, total, available;
-    char title[25], author[20];
+    char title[50], author[50],lib[50]={0};
 
-    while (fscanf(fp, "%d|%24[^|]|%19[^|]|%d|%d\n",
-                  &id, title, author,
-                  &total, &available) == 5) {
+    while (fscanf(fp,"%d|%49[^|]|%49[^|]|%49[^|]|%d|%d\n",
+                  &id, lib, title, author,
+                  &total, &available) == 6) {
 
-        struct treenode *n = createnode(id, title, author, total);
+        struct treenode *n = createnode(id, lib, title, author, total);
         if (!n) continue;
 
         n->available_copies = available;
@@ -67,13 +68,13 @@ void save_admin(struct admin *root){
 }
 
 struct admin *load_admin(void){
-    FILE *fp=fopen("admin_login.txt","w");
+    FILE *fp=fopen("admin_login.txt","r");
     if(!fp){
         return NULL;
     }
     struct admin *root = NULL;
     int id;
-    char name[50], email[50], password[50],lib[50];
+    char name[50], email[50], password[50], lib[50];
 
     while (fscanf(fp, "%d|%49[^|]|%49[^|]|%49[^|]|%49[^\n]",
                   &id, name, lib, email, password) == 5) {

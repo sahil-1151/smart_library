@@ -1,6 +1,6 @@
 #include "Bst.h"
 
-struct treenode * createnode(int book_id,const char *title,const char *author,int total_copies){
+struct treenode * createnode(int book_id,const char *lib,const char *title,const char *author,int total_copies){
     struct treenode* newnode=(struct treenode *)malloc(sizeof(struct treenode));
     if (!newnode) {
         printf("Memory allocation failed\n");
@@ -9,6 +9,7 @@ struct treenode * createnode(int book_id,const char *title,const char *author,in
     newnode->book_id=book_id;
     strncpy(newnode->title, title, sizeof(newnode->title) - 1);
     newnode->title[sizeof(newnode->title) - 1] = '\0';
+    strncpy(newnode->lib,lib,sizeof(newnode->lib) -1);
     strncpy(newnode->author, author, sizeof(newnode->author) - 1);
     newnode->author[sizeof(newnode->author) - 1] = '\0';
     newnode->total_copies=total_copies;
@@ -73,6 +74,7 @@ int search_string(struct treenode *root,const char *string){
         int found_count=0;
     if (case_insensitive_cmp(root->title, string) || case_insensitive_cmp(root->author, string)){
                             printf("\n      Book Id     : %d\n",root->book_id);
+                            printf("      Library     : %s\n",root->lib);
                             printf("      Title       : %s\n",root->title);
                             printf("      Author      : %s\n",root->author);
                             printf(" Available Copies : %d\n",root->available_copies);
@@ -117,6 +119,8 @@ struct treenode *deletenode(struct treenode *root,int book_id){
         else{
             struct treenode *temp=findmin(root->right);
             root->book_id=temp->book_id;
+            strncpy(root->lib,temp->lib, sizeof(root->lib) - 1);
+            root->lib[sizeof(root->lib) - 1] = '\0';
             strncpy(root->title, temp->title, sizeof(root->title) - 1);
             root->title[sizeof(root->title) - 1] = '\0';
             strncpy(root->author, temp->author, sizeof(root->author) - 1);
@@ -135,6 +139,21 @@ void visit(struct treenode *root){
     printf("Author Name :%s\n",root->author);
     printf("Book Title :%s\n",root->title);
     printf("Available Copies :%d\n\n",root->available_copies);
+}
+
+void visit_lib(struct treenode *root,const char *lib){
+    if(root == NULL){
+        return;
+    }
+    if(case_insensitive_cmp(root->lib,lib)){
+        printf("\n      Book Id     : %d\n",root->book_id);
+        printf("      Library     : %s\n",root->lib);
+        printf("      Title       : %s\n",root->title);
+        printf("      Author      : %s\n",root->author);
+        printf(" Available Copies : %d\n",root->available_copies);
+    }
+    visit_lib(root->left,lib);
+    visit_lib(root->right,lib);
 }
 
 void inorder(struct treenode *root){

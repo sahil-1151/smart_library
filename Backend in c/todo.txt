@@ -1,0 +1,5 @@
+//ask user if he want to search in a specific library if yes then go ,if he want to search in all then also .
+//creation of library ll to display all the library which is present in the system.
+//time slot creation for every book , when ever the book is free.
+
+//frontend work
