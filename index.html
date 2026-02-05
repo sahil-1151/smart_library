@@ -99,6 +99,7 @@
             <div class="card">
                 <h3>Books in your library</h3>
                 <div id="adminBooksList" class="books-grid"></div>
+                <div id="adminBooksListPager" class="pager"></div>
             </div>
         </section>
 
@@ -174,10 +175,12 @@
                     <button type="submit" class="btn btn-primary">Search</button>
                 </form>
                 <div id="userSearchResults" class="books-grid"></div>
+                <div id="userSearchResultsPager" class="pager"></div>
             </div>
             <div class="card">
                 <h3>All books</h3>
                 <div id="userBooksList" class="books-grid"></div>
+                <div id="userBooksListPager" class="pager"></div>
             </div>
             <div class="card">
                 <h3>Your issued books</h3>
@@ -185,6 +188,24 @@
             </div>
         </section>
     </main>
+
+    <!-- Edit book modal (mirrors Bst.h edit) -->
+    <div id="editBookModal" class="modal" aria-hidden="true">
+        <div class="modal-backdrop" data-close="editBookModal"></div>
+        <div class="modal-content card">
+            <h3>Edit book</h3>
+            <form id="editBookForm" class="form">
+                <label>Book ID <span id="editBookId" class="edit-book-id"></span></label>
+                <label>Title <input type="text" id="editBookTitle" required></label>
+                <label>Author <input type="text" id="editBookAuthor" required></label>
+                <label>Total copies <input type="number" id="editBookTotal" min="0" required></label>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" id="editBookCancel" class="btn btn-ghost">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>

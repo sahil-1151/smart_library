@@ -308,6 +308,22 @@ function deleteBook(bookId) {
   return true;
 }
 
+/** Edit book details (mirrors Bst.h edit: title, author, total_copies; available_copies set to total_copies). */
+function editBook(bookId, { title, author, total_copies }) {
+  const books = getBooks();
+  const book = books.find(b => b.book_id === bookId);
+  if (!book) return false;
+  if (title != null) book.title = String(title).trim();
+  if (author != null) book.author = String(author).trim();
+  if (total_copies != null) {
+    const total = parseInt(total_copies, 10) || 0;
+    book.total_copies = total;
+    book.available_copies = total; // Bst.c edit sets both to total_copies
+  }
+  saveBooks(books);
+  return true;
+}
+
 function searchBooksById(bookId) {
   return getBooks().find(b => b.book_id === bookId) || null;
 }
@@ -414,14 +430,31 @@ function showMessage(msg, isError = false) {
   setTimeout(() => { el.style.display = 'none'; }, 4000);
 }
 
+const BOOKS_PAGE_SIZE = 6;
+
 function renderBooksList(containerId, books, options = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
   if (!books || books.length === 0) {
     container.innerHTML = '<p class="empty">No books found.</p>';
+    container._lastBooks = [];
+    container._lastOptions = options;
+    const pagerEl = options.pagerId ? document.getElementById(options.pagerId) : null;
+    if (pagerEl) pagerEl.innerHTML = '';
     return;
   }
-  container.innerHTML = books.map(b => `
+  const pageSize = (options.pagination && options.pagerId && (options.pageSize || BOOKS_PAGE_SIZE)) || books.length;
+  const totalPages = Math.ceil(books.length / pageSize) || 1;
+  let page = parseInt(container.dataset.currentPage || '1', 10);
+  if (page < 1) page = 1;
+  if (page > totalPages) page = totalPages;
+  container.dataset.currentPage = String(page);
+  const start = (page - 1) * pageSize;
+  const slice = options.pagination && options.pagerId ? books.slice(start, start + pageSize) : books;
+  container._lastBooks = books;
+  container._lastOptions = options;
+
+  container.innerHTML = slice.map(b => `
     <div class="book-card">
       <div class="book-id">#${b.book_id}</div>
       <h3>${escapeHtml(b.title)}</h3>
@@ -429,12 +462,19 @@ function renderBooksList(containerId, books, options = {}) {
       <p class="lib">${escapeHtml(b.lib)}</p>
       <p class="copies">Available: ${b.available_copies} / ${b.total_copies}</p>
       ${options.showIssue && b.available_copies > 0 ? `<button type="button" class="btn btn-sm" data-issue="${b.book_id}">Issue</button>` : ''}
+      ${options.showEdit ? `<button type="button" class="btn btn-sm" data-edit="${b.book_id}">Edit</button>` : ''}
       ${options.showDelete ? `<button type="button" class="btn btn-sm danger" data-delete="${b.book_id}">Delete</button>` : ''}
     </div>
   `).join('');
+
   if (options.onIssue) {
     container.querySelectorAll('[data-issue]').forEach(btn => {
       btn.addEventListener('click', () => options.onIssue(parseInt(btn.dataset.issue, 10)));
+    });
+  }
+  if (options.onEdit) {
+    container.querySelectorAll('[data-edit]').forEach(btn => {
+      btn.addEventListener('click', () => options.onEdit(parseInt(btn.dataset.edit, 10)));
     });
   }
   if (options.onDelete) {
@@ -442,6 +482,26 @@ function renderBooksList(containerId, books, options = {}) {
       btn.addEventListener('click', () => options.onDelete(parseInt(btn.dataset.delete, 10)));
     });
   }
+
+  const pagerEl = options.pagerId ? document.getElementById(options.pagerId) : null;
+  if (pagerEl && options.pagination && totalPages > 1) {
+    let pagerHtml = '<div class="pager-inner"><span class="pager-label">Page </span>';
+    const go = (p) => {
+      container.dataset.currentPage = String(p);
+      renderBooksList(containerId, books, options);
+    };
+    if (page > 1) pagerHtml += `<button type="button" class="btn btn-sm pager-btn" data-page="${page - 1}">Prev</button>`;
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === page) pagerHtml += `<span class="pager-num current">${i}</span>`;
+      else pagerHtml += `<button type="button" class="btn btn-sm pager-num" data-page="${i}">${i}</button>`;
+    }
+    if (page < totalPages) pagerHtml += `<button type="button" class="btn btn-sm pager-btn" data-page="${page + 1}">Next</button>`;
+    pagerHtml += '</div>';
+    pagerEl.innerHTML = pagerHtml;
+    pagerEl.querySelectorAll('[data-page]').forEach(btn => {
+      btn.addEventListener('click', () => go(parseInt(btn.dataset.page, 10)));
+    });
+  } else if (pagerEl) pagerEl.innerHTML = '';
 }
 
 function escapeHtml(s) {
@@ -523,6 +583,23 @@ function initAdminLogin() {
   };
 }
 
+function openEditBookModal(bookId) {
+  const book = searchBooksById(bookId);
+  if (!book) return;
+  document.getElementById('editBookId').textContent = '#' + book.book_id;
+  document.getElementById('editBookTitle').value = book.title || '';
+  document.getElementById('editBookAuthor').value = book.author || '';
+  document.getElementById('editBookTotal').value = String(book.total_copies ?? 0);
+  document.getElementById('editBookForm').dataset.editBookId = String(book.book_id);
+  const modal = document.getElementById('editBookModal');
+  if (modal) { modal.classList.add('open'); modal.setAttribute('aria-hidden', 'false'); }
+}
+
+function closeEditBookModal() {
+  const modal = document.getElementById('editBookModal');
+  if (modal) { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); }
+}
+
 function loadAdminDashboard() {
   if (!currentAdmin) return;
   document.getElementById('adminInfoName').textContent = currentAdmin.name;
@@ -531,7 +608,11 @@ function loadAdminDashboard() {
   document.getElementById('adminInfoEmail').textContent = currentAdmin.email;
   const books = booksForLibrary(currentAdmin.lib);
   renderBooksList('adminBooksList', books, {
+    showEdit: true,
     showDelete: true,
+    pagerId: 'adminBooksListPager',
+    pagination: true,
+    onEdit: (id) => openEditBookModal(id),
     onDelete: (id) => {
       const ok = window.confirm(`Do you really want to delete Book ID ${id}?`);
       if (!ok) return;
@@ -553,6 +634,24 @@ function initAdminDashboard() {
     if (isNaN(bookId) || !title || isNaN(total)) { showMessage('Invalid fields', true); return; }
     if (addBook(bookId, currentAdmin.lib, title, author, total)) { showMessage('Book added'); loadAdminDashboard(); e.target.reset(); }
     else showMessage('Book ID already exists', true);
+  };
+  const editModal = document.getElementById('editBookModal');
+  const editCancel = document.getElementById('editBookCancel');
+  if (editCancel) editCancel.onclick = closeEditBookModal;
+  const backdrop = editModal && editModal.querySelector('.modal-backdrop');
+  if (backdrop) backdrop.onclick = closeEditBookModal;
+  document.getElementById('editBookForm').onsubmit = (e) => {
+    e.preventDefault();
+    const bookId = parseInt(document.getElementById('editBookForm').dataset.editBookId || '0', 10);
+    const title = document.getElementById('editBookTitle').value.trim();
+    const author = document.getElementById('editBookAuthor').value.trim();
+    const total = parseInt(document.getElementById('editBookTotal').value, 10);
+    if (!title || !author || isNaN(total) || total < 0) { showMessage('Invalid fields', true); return; }
+    if (editBook(bookId, { title, author, total_copies: total })) {
+      showMessage('Book updated');
+      closeEditBookModal();
+      loadAdminDashboard();
+    } else showMessage('Book not found', true);
   };
 }
 
@@ -636,11 +735,16 @@ function loadUserDashboard() {
   document.getElementById('userInfoEmail').textContent = currentUser.email;
   document.getElementById('userInfoId').textContent = currentUser.id;
   const allBooks = getBooks();
-  renderBooksList('userBooksList', allBooks, { showIssue: true, onIssue: (bookId) => {
-    const r = issueBook(currentUser.id, bookId);
-    showMessage(r.ok ? 'Book issued' : r.msg, !r.ok);
-    if (r.ok) loadUserDashboard();
-  } });
+  renderBooksList('userBooksList', allBooks, {
+    showIssue: true,
+    pagerId: 'userBooksListPager',
+    pagination: true,
+    onIssue: (bookId) => {
+      const r = issueBook(currentUser.id, bookId);
+      showMessage(r.ok ? 'Book issued' : r.msg, !r.ok);
+      if (r.ok) loadUserDashboard();
+    }
+  });
   const issued = getIssuedForUser(currentUser.id);
   const issuedEl = document.getElementById('userIssuedList');
   if (issuedEl) {
@@ -671,11 +775,16 @@ function initUserDashboard() {
       const id = parseInt(q, 10);
       books = isNaN(id) ? [] : (searchBooksById(id) ? [searchBooksById(id)] : []);
     } else books = searchBooksByString(q);
-    renderBooksList('userSearchResults', books, { showIssue: true, onIssue: (bookId) => {
-      const r = issueBook(currentUser.id, bookId);
-      showMessage(r.ok ? 'Book issued' : r.msg, !r.ok);
-      loadUserDashboard();
-    } });
+    renderBooksList('userSearchResults', books, {
+      showIssue: true,
+      pagerId: 'userSearchResultsPager',
+      pagination: true,
+      onIssue: (bookId) => {
+        const r = issueBook(currentUser.id, bookId);
+        showMessage(r.ok ? 'Book issued' : r.msg, !r.ok);
+        loadUserDashboard();
+      }
+    });
   };
 }
 
