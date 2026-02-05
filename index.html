@@ -50,6 +50,20 @@
             </form>
         </section>
 
+        <!-- Admin register OTP -->
+        <section id="admin-register-otp" class="screen">
+            <h2>Verify your email</h2>
+            <div class="card">
+                <p>OTP sent to <strong id="adminOtpEmail"></strong></p>
+                <p id="adminOtpDevHint" class="hint">Check your email for the 6-digit OTP code.</p>
+                <form id="adminOtpForm" class="form">
+                    <label>Enter OTP <input type="text" id="adminOtpInput" placeholder="000000" maxlength="6" pattern="[0-9]{6}" required></label>
+                    <button type="submit" class="btn btn-primary">Verify</button>
+                    <button type="button" id="adminOtpBack" class="btn btn-ghost">Back</button>
+                </form>
+            </div>
+        </section>
+
         <!-- Admin login -->
         <section id="admin-login" class="screen">
             <h2>Admin Login</h2>
@@ -108,6 +122,20 @@
                 <button type="submit" class="btn btn-primary">Register</button>
                 <button type="button" id="userRegBack" class="btn btn-ghost">Back</button>
             </form>
+        </section>
+
+        <!-- User register OTP -->
+        <section id="user-register-otp" class="screen">
+            <h2>Verify your email</h2>
+            <div class="card">
+                <p>OTP sent to <strong id="userOtpEmail"></strong></p>
+                <p id="userOtpDevHint" class="hint">Check your email for the 6-digit OTP code.</p>
+                <form id="userOtpForm" class="form">
+                    <label>Enter OTP <input type="text" id="userOtpInput" placeholder="000000" maxlength="6" pattern="[0-9]{6}" required></label>
+                    <button type="submit" class="btn btn-primary">Verify</button>
+                    <button type="button" id="userOtpBack" class="btn btn-ghost">Back</button>
+                </form>
+            </div>
         </section>
 
         <!-- User login -->

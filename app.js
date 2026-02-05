@@ -366,8 +366,8 @@ function getIssuedForUser(studentId) {
   return getIssued().filter(i => i.student_id === studentId && !i.returned);
 }
 
-// ----- Auto-load backend .txt files (when served from same origin as Backend in c folder) -----
-const BACKEND_BASE = '../Backend%20in%20c/';
+// ----- Auto-load backend .txt files (when served via e.g. python3 -m http.server 8000 from project root) -----
+const BACKEND_BASE = ''; // same folder as index.html
 const BACKEND_FILES = ['data_book.txt', 'user_login.txt', 'admin_login.txt', 'issue_book.txt', 'queue_book.txt'];
 
 /** Clear all app data from localStorage so backend .txt files are the single source of truth on each load. */
@@ -489,8 +489,11 @@ function initAdminRegister() {
 }
 
 function initAdminRegisterOtp() {
-  document.getElementById('adminOtpBack').onclick = () => { pendingReg = null; showScreen('admin-register'); };
-  document.getElementById('adminOtpForm').onsubmit = (e) => {
+  const adminOtpBack = document.getElementById('adminOtpBack');
+  const adminOtpForm = document.getElementById('adminOtpForm');
+  if (!adminOtpBack || !adminOtpForm) return; // OTP screen not in DOM
+  adminOtpBack.onclick = () => { pendingReg = null; showScreen('admin-register'); };
+  adminOtpForm.onsubmit = (e) => {
     e.preventDefault();
     const input = document.getElementById('adminOtpInput').value.trim();
     if (!pendingReg || pendingReg.type !== 'admin') { showScreen('admin-entry'); return; }
@@ -593,8 +596,11 @@ function initUserRegister() {
 }
 
 function initUserRegisterOtp() {
-  document.getElementById('userOtpBack').onclick = () => { pendingReg = null; showScreen('user-register'); };
-  document.getElementById('userOtpForm').onsubmit = (e) => {
+  const userOtpBack = document.getElementById('userOtpBack');
+  const userOtpForm = document.getElementById('userOtpForm');
+  if (!userOtpBack || !userOtpForm) return; // OTP screen not in DOM
+  userOtpBack.onclick = () => { pendingReg = null; showScreen('user-register'); };
+  userOtpForm.onsubmit = (e) => {
     e.preventDefault();
     const input = document.getElementById('userOtpInput').value.trim();
     if (!pendingReg || pendingReg.type !== 'user') { showScreen('user-entry'); return; }
