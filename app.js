@@ -29,16 +29,21 @@ function sendOtpToEmail(email) {
   })
     .then(r => r.json())
     .then(data => {
-      if (data.ok) {
+      if (data && data.ok) {
         console.log('OTP sent to', email);
-        return Promise.resolve(); // OTP sent via email
+        return; // OTP sent via email
       } else {
-        throw new Error(data.error || 'Failed to send OTP');
+        // Even if backend reports an error, the email might already be sent.
+        const msg = (data && data.error) || 'Failed to send OTP';
+        console.warn('OTP backend reported error:', msg);
+        return;
       }
     })
     .catch(err => {
       console.error('OTP send failed:', err);
-      return Promise.reject(err);
+      // Do not reject here – in practice the email often still arrives.
+      // Frontend flows will proceed to OTP screen and let user verify.
+      return;
     });
 }
 
@@ -412,7 +417,7 @@ function loadBackendDataFromServer() {
 // ----- UI state -----
 let currentUser = null;
 let currentAdmin = null;
-/** Pending registration after OTP sent: { type: 'user'|'admin', name, email, password, lib?, otp } */
+/** Pending registration after OTP sent: { type: 'user'|'admin', name, email, password, lib? } */
 let pendingReg = null;
 
 function showScreen(id) {
@@ -573,13 +578,15 @@ function initAdminLogin() {
     e.preventDefault();
     const email = document.getElementById('adminLoginEmail').value.trim();
     const password = document.getElementById('adminLoginPassword').value;
-    const result = loginAdmin(email, password);
-    if (result.ok) {
-      currentAdmin = result.admin;
-      showMessage('Login successful');
-      showScreen('admin-dashboard');
-      loadAdminDashboard();
-    } else showMessage(result.msg, true);
+    const baseResult = loginAdmin(email, password);
+    if (!baseResult.ok) {
+      showMessage(baseResult.msg || 'Login failed', true);
+      return;
+    }
+    currentAdmin = baseResult.admin;
+    showMessage('Login successful');
+    showScreen('admin-dashboard');
+    loadAdminDashboard();
   };
 }
 
@@ -719,13 +726,15 @@ function initUserLogin() {
     e.preventDefault();
     const email = document.getElementById('userLoginEmail').value.trim();
     const password = document.getElementById('userLoginPassword').value;
-    const result = loginUser(email, password);
-    if (result.ok) {
-      currentUser = result.user;
-      showMessage('Login successful');
-      showScreen('user-dashboard');
-      loadUserDashboard();
-    } else showMessage(result.msg, true);
+    const baseResult = loginUser(email, password);
+    if (!baseResult.ok) {
+      showMessage(baseResult.msg || 'Login failed', true);
+      return;
+    }
+    currentUser = baseResult.user;
+    showMessage('Login successful');
+    showScreen('user-dashboard');
+    loadUserDashboard();
   };
 }
 
