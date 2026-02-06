@@ -228,6 +228,15 @@ function saveIssued(issued) {
   localStorage.setItem(STORAGE_KEYS.issued, JSON.stringify(issued));
 }
 
+function getQueue() {
+  const raw = localStorage.getItem(STORAGE_KEYS.queue);
+  return raw ? JSON.parse(raw) : [];
+}
+
+function saveQueue(queue) {
+  localStorage.setItem(STORAGE_KEYS.queue, JSON.stringify(queue));
+}
+
 function nextUserId() {
   let n = parseInt(localStorage.getItem(STORAGE_KEYS.nextUserId) || '1', 10);
   localStorage.setItem(STORAGE_KEYS.nextUserId, String(n + 1));
@@ -260,6 +269,42 @@ function caseInsensitiveMatch(a, b) {
   return (a || '').toLowerCase().includes((b || '').toLowerCase());
 }
 
+// ----- Serialize to backend .txt format -----
+function serializeBooks(books) {
+  const lines = (books || []).map(b =>
+    `${b.book_id}|${b.lib || ''}|${b.title || ''}|${b.author || ''}|${b.total_copies || 0}|${b.available_copies || 0}`
+  );
+  return lines.length ? lines.join('\n') + '\n' : '';
+}
+
+function serializeUsers(users) {
+  const lines = (users || []).map(u =>
+    `${u.id}|${u.name || ''}|${u.email || ''}|${u.password || ''}`
+  );
+  return lines.length ? lines.join('\n') + '\n' : '';
+}
+
+function serializeAdmins(admins) {
+  const lines = (admins || []).map(a =>
+    `${a.id}|${a.name || ''}|${a.lib || ''}|${a.email || ''}|${a.password || ''}`
+  );
+  return lines.length ? lines.join('\n') + '\n' : '';
+}
+
+function serializeIssued(issued) {
+  const lines = (issued || [])
+    .filter(i => !i.returned)
+    .map(i =>
+      `${i.student_id}|${i.book_id}|${i.issue_date.day}|${i.issue_date.month}|${i.issue_date.year}|${i.due_date.day}|${i.due_date.month}|${i.due_date.year}`
+    );
+  return lines.length ? lines.join('\n') + '\n' : '';
+}
+
+function serializeQueue(queue) {
+  const lines = (queue || []).map(q => `${q.student_id}|${q.book_id}`);
+  return lines.length ? lines.join('\n') + '\n' : '';
+}
+
 // ----- Auth -----
 function registerUser(name, email, password) {
   const users = getUsers();
@@ -267,6 +312,7 @@ function registerUser(name, email, password) {
   const id = nextUserId();
   users.push({ id, name, email, password });
   saveUsers(users);
+  scheduleSync();
   return { ok: true, user: { id, name, email } };
 }
 
@@ -282,6 +328,7 @@ function registerAdmin(name, email, password, lib) {
   const id = nextAdminId();
   admins.push({ id, name, email, password, lib });
   saveAdmins(admins);
+  scheduleSync();
   return { ok: true, admin: { id, name, email, lib } };
 }
 
@@ -289,6 +336,14 @@ function loginAdmin(email, password) {
   const admins = getAdmins();
   const a = admins.find(x => x.email.toLowerCase() === email.toLowerCase() && x.password === password);
   return a ? { ok: true, admin: { id: a.id, name: a.name, email: a.email, lib: a.lib } } : { ok: false, msg: 'Login failed' };
+}
+
+function loginAny(email, password) {
+  const adminResult = loginAdmin(email, password);
+  if (adminResult.ok) return { ok: true, type: 'admin', admin: adminResult.admin };
+  const userResult = loginUser(email, password);
+  if (userResult.ok) return { ok: true, type: 'user', user: userResult.user };
+  return { ok: false, msg: 'Login failed' };
 }
 
 // ----- Books -----
@@ -304,12 +359,14 @@ function addBook(bookId, lib, title, author, totalCopies) {
     available_copies: totalCopies || 0,
   });
   saveBooks(books);
+  scheduleSync();
   return true;
 }
 
 function deleteBook(bookId) {
   let books = getBooks().filter(b => b.book_id !== bookId);
   saveBooks(books);
+  scheduleSync();
   return true;
 }
 
@@ -326,6 +383,7 @@ function editBook(bookId, { title, author, total_copies }) {
     book.available_copies = total; // Bst.c edit sets both to total_copies
   }
   saveBooks(books);
+  scheduleSync();
   return true;
 }
 
@@ -367,6 +425,7 @@ function issueBook(studentId, bookId) {
   book.available_copies--;
   saveBooks(books);
   saveIssued(issued);
+  scheduleSync();
   return { ok: true };
 }
 
@@ -380,6 +439,7 @@ function returnBook(studentId, bookId) {
   if (book) book.available_copies++;
   saveBooks(books);
   saveIssued(issued);
+  scheduleSync();
   return { ok: true };
 }
 
@@ -387,9 +447,10 @@ function getIssuedForUser(studentId) {
   return getIssued().filter(i => i.student_id === studentId && !i.returned);
 }
 
-// ----- Auto-load backend .txt files (when served via e.g. python3 -m http.server 8000 from project root) -----
+// ----- Auto-load backend .txt files (when served via backend_server.py) -----
 const BACKEND_BASE = ''; // same folder as index.html
 const BACKEND_FILES = ['data_book.txt', 'user_login.txt', 'admin_login.txt', 'issue_book.txt', 'queue_book.txt'];
+const BACKEND_SAVE_URL = '/api/save';
 
 /** Clear all app data from localStorage so backend .txt files are the single source of truth on each load. */
 function clearAppLocalStorage() {
@@ -397,14 +458,16 @@ function clearAppLocalStorage() {
 }
 
 function loadBackendDataFromServer() {
-  clearAppLocalStorage();
   const filesMap = {};
   let done = 0;
   const total = BACKEND_FILES.length;
   if (total === 0) return;
   function maybeImport() {
     done++;
-    if (done === total && Object.keys(filesMap).length > 0) importFromBackendFiles(filesMap);
+    if (done === total && Object.keys(filesMap).length > 0) {
+      clearAppLocalStorage();
+      importFromBackendFiles(filesMap);
+    }
   }
   BACKEND_FILES.forEach(name => {
     fetch(BACKEND_BASE + name)
@@ -414,16 +477,104 @@ function loadBackendDataFromServer() {
   });
 }
 
+let syncTimer = null;
+let saveErrorShown = false;
+
+function setSaveStatus(text, isError = false) {
+  const el = document.getElementById('saveStatus');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('error', isError);
+}
+
+function checkBackend() {
+  return fetch('/api/ping')
+    .then(r => r.ok ? r.json() : Promise.reject(new Error(r.status)))
+    .then(() => {
+      setSaveStatus('Server online');
+      return true;
+    })
+    .catch(() => {
+      setSaveStatus('Server offline', true);
+      return false;
+    });
+}
+function scheduleSync() {
+  if (!BACKEND_SAVE_URL) return;
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    syncBackendFiles();
+    syncTimer = null;
+  }, 200);
+}
+
+function syncBackendFiles() {
+  const files = {
+    'data_book.txt': serializeBooks(getBooks()),
+    'user_login.txt': serializeUsers(getUsers()),
+    'admin_login.txt': serializeAdmins(getAdmins()),
+    'issue_book.txt': serializeIssued(getIssued()),
+    'queue_book.txt': serializeQueue(getQueue()),
+  };
+  return fetch(BACKEND_SAVE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files })
+  })
+    .then(r => {
+      if (!r.ok) {
+        return r.text().then(t => { throw new Error(`HTTP ${r.status} ${t || ''}`); });
+      }
+      return r.json();
+    })
+    .then(data => {
+      if (!data || !data.ok) {
+        console.warn('Backend save failed:', data && data.error);
+        if (!saveErrorShown) {
+          showMessage('Save failed. Run backend_server.py and open http://localhost:8000', true);
+          saveErrorShown = true;
+        }
+        return false;
+      }
+      saveErrorShown = false;
+      return true;
+    })
+    .catch(err => {
+      console.warn('Backend save failed:', err);
+      if (!saveErrorShown) {
+        showMessage('Save failed. Run backend_server.py and open http://localhost:8000', true);
+        saveErrorShown = true;
+      }
+      return false;
+    });
+}
+
 // ----- UI state -----
 let currentUser = null;
 let currentAdmin = null;
 /** Pending registration after OTP sent: { type: 'user'|'admin', name, email, password, lib? } */
 let pendingReg = null;
 
+function updateNav() {
+  const loginBtn = document.getElementById('navLogin');
+  const signupBtn = document.getElementById('navSignup');
+  const dashBtn = document.getElementById('navDashboard');
+  const logoutBtn = document.getElementById('navLogout');
+  const loggedIn = !!currentAdmin || !!currentUser;
+  if (loginBtn) loginBtn.style.display = loggedIn ? 'none' : '';
+  if (signupBtn) signupBtn.style.display = loggedIn ? 'none' : '';
+  if (dashBtn) {
+    dashBtn.style.display = loggedIn ? '' : 'none';
+    dashBtn.textContent = currentAdmin ? 'Admin Dashboard' : 'User Dashboard';
+  }
+  if (logoutBtn) logoutBtn.style.display = loggedIn ? '' : 'none';
+}
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
   const el = document.getElementById(id);
   if (el) el.classList.add('active');
+  updateNav();
 }
 
 function showMessage(msg, isError = false) {
@@ -435,7 +586,67 @@ function showMessage(msg, isError = false) {
   setTimeout(() => { el.style.display = 'none'; }, 4000);
 }
 
-const BOOKS_PAGE_SIZE = 6;
+const BOOKS_PAGE_SIZE = 10;
+
+function hashString(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function bookCoverStyle(book) {
+  const seed = `${book.title}|${book.author}|${book.lib}|${book.book_id}`;
+  const base = hashString(seed);
+  const h1 = base % 360;
+  const h2 = (base * 3) % 360;
+  const h3 = (base * 7) % 360;
+  return `--cover-1: hsl(${h1} 70% 45%); --cover-2: hsl(${h2} 72% 52%); --cover-3: hsl(${h3} 78% 60%);`;
+}
+
+function escapeSvgText(text) {
+  return String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function bookCoverDataUri(book) {
+  const titleRaw = (book.title || 'Untitled').trim();
+  const authorRaw = (book.author || 'Unknown Author').trim();
+  const title = escapeSvgText(titleRaw.slice(0, 42));
+  const author = escapeSvgText(authorRaw.slice(0, 28));
+  const seed = `${book.title}|${book.author}|${book.lib}|${book.book_id}`;
+  const base = hashString(seed);
+  const h1 = base % 360;
+  const h2 = (base * 3) % 360;
+  const h3 = (base * 7) % 360;
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="480" viewBox="0 0 320 480">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="hsl(${h1} 70% 45%)"/>
+      <stop offset="100%" stop-color="hsl(${h2} 75% 55%)"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="hsla(${h3} 80% 55% / 0.35)"/>
+      <stop offset="100%" stop-color="hsla(${h1} 70% 40% / 0.15)"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="480" fill="url(#g)"/>
+  <rect width="320" height="480" fill="url(#g2)"/>
+  <rect x="18" y="18" width="284" height="444" rx="18" fill="rgba(0,0,0,0.18)"/>
+  <rect x="26" y="26" width="268" height="428" rx="14" fill="rgba(255,255,255,0.08)"/>
+  <text x="30" y="320" font-family="Space Grotesk, Sora, Arial, sans-serif" font-size="22" fill="white" font-weight="600">${title}</text>
+  <text x="30" y="356" font-family="Space Grotesk, Sora, Arial, sans-serif" font-size="13" fill="rgba(255,255,255,0.85)" letter-spacing="1">${author}</text>
+  <rect x="30" y="372" width="90" height="6" rx="3" fill="rgba(255,255,255,0.6)"/>
+</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
 
 function renderBooksList(containerId, books, options = {}) {
   const container = document.getElementById(containerId);
@@ -459,18 +670,28 @@ function renderBooksList(containerId, books, options = {}) {
   container._lastBooks = books;
   container._lastOptions = options;
 
-  container.innerHTML = slice.map(b => `
-    <div class="book-card">
-      <div class="book-id">#${b.book_id}</div>
-      <h3>${escapeHtml(b.title)}</h3>
-      <p class="author">${escapeHtml(b.author)}</p>
-      <p class="lib">${escapeHtml(b.lib)}</p>
-      <p class="copies">Available: ${b.available_copies} / ${b.total_copies}</p>
-      ${options.showIssue && b.available_copies > 0 ? `<button type="button" class="btn btn-sm" data-issue="${b.book_id}">Issue</button>` : ''}
-      ${options.showEdit ? `<button type="button" class="btn btn-sm" data-edit="${b.book_id}">Edit</button>` : ''}
-      ${options.showDelete ? `<button type="button" class="btn btn-sm danger" data-delete="${b.book_id}">Delete</button>` : ''}
+  container.innerHTML = slice.map(b => {
+    const coverUrl = bookCoverDataUri(b);
+    return `
+    <div class="book-card" data-book-id="${b.book_id}">
+      <div class="book-cover" style="${bookCoverStyle(b)}">
+        <img class="book-cover-img" src="${coverUrl}" alt="${escapeHtml(b.title)} cover" loading="lazy">
+      </div>
+      <div class="book-meta">
+        <div class="book-id">#${b.book_id}</div>
+        <h3>${escapeHtml(b.title)}</h3>
+        <p class="author">${escapeHtml(b.author)}</p>
+        <p class="lib">${escapeHtml(b.lib)}</p>
+        <p class="copies">Available: ${b.available_copies} / ${b.total_copies}</p>
+        <div class="book-actions">
+          ${options.showIssue && b.available_copies > 0 ? `<button type="button" class="btn btn-sm" data-issue="${b.book_id}">Issue</button>` : ''}
+          ${options.showEdit ? `<button type="button" class="btn btn-sm" data-edit="${b.book_id}">Edit</button>` : ''}
+          ${options.showDelete ? `<button type="button" class="btn btn-sm danger" data-delete="${b.book_id}">Delete</button>` : ''}
+        </div>
+      </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   if (options.onIssue) {
     container.querySelectorAll('[data-issue]').forEach(btn => {
@@ -487,6 +708,8 @@ function renderBooksList(containerId, books, options = {}) {
       btn.addEventListener('click', () => options.onDelete(parseInt(btn.dataset.delete, 10)));
     });
   }
+
+  // No external cover fetch; all covers are generated locally.
 
   const pagerEl = options.pagerId ? document.getElementById(options.pagerId) : null;
   if (pagerEl && options.pagination && totalPages > 1) {
@@ -517,18 +740,42 @@ function escapeHtml(s) {
 
 // ----- Screens -----
 function initHome() {
-  document.getElementById('goAdmin').onclick = () => showScreen('admin-entry');
-  document.getElementById('goUser').onclick = () => showScreen('user-entry');
+  // Home screen is now navigated from the navbar.
 }
 
-function initAdminEntry() {
-  document.getElementById('adminBack').onclick = () => showScreen('home');
-  document.getElementById('adminRegisterBtn').onclick = () => showScreen('admin-register');
-  document.getElementById('adminLoginBtn').onclick = () => showScreen('admin-login');
+function initNav() {
+  const homeBtn = document.getElementById('navHome');
+  if (homeBtn) homeBtn.onclick = () => showScreen('home');
+  const aboutBtn = document.getElementById('navAbout');
+  if (aboutBtn) {
+    aboutBtn.onclick = () => showScreen('about-page');
+  }
+  const loginBtn = document.getElementById('navLogin');
+  if (loginBtn) loginBtn.onclick = () => showScreen('user-login');
+  const signupBtn = document.getElementById('navSignup');
+  if (signupBtn) signupBtn.onclick = () => showScreen('user-register');
+  const dashBtn = document.getElementById('navDashboard');
+  if (dashBtn) {
+    dashBtn.onclick = () => {
+      if (currentAdmin) showScreen('admin-dashboard');
+      else if (currentUser) showScreen('user-dashboard');
+      else showScreen('auth-login');
+    };
+  }
+  const logoutBtn = document.getElementById('navLogout');
+  if (logoutBtn) {
+    logoutBtn.onclick = () => {
+      currentAdmin = null;
+      currentUser = null;
+      showScreen('home');
+      updateNav();
+    };
+  }
+  updateNav();
 }
 
 function initAdminRegister() {
-  document.getElementById('adminRegBack').onclick = () => showScreen('admin-entry');
+  document.getElementById('adminRegBack').onclick = () => showScreen('auth-register');
   document.getElementById('adminRegForm').onsubmit = (e) => {
     e.preventDefault();
     const name = document.getElementById('adminRegName').value.trim();
@@ -561,32 +808,14 @@ function initAdminRegisterOtp() {
   adminOtpForm.onsubmit = (e) => {
     e.preventDefault();
     const input = document.getElementById('adminOtpInput').value.trim();
-    if (!pendingReg || pendingReg.type !== 'admin') { showScreen('admin-entry'); return; }
+    if (!pendingReg || pendingReg.type !== 'admin') { showScreen('home'); return; }
     verifyOtpWithBackend(pendingReg.email, input).then(verifyResult => {
       if (!verifyResult.ok) { showMessage(verifyResult.msg || 'Invalid OTP', true); return; }
       const result = registerAdmin(pendingReg.name, pendingReg.email, pendingReg.password, pendingReg.lib);
       pendingReg = null;
-      if (result.ok) { showMessage('Registration successful'); showScreen('admin-entry'); }
+      if (result.ok) { showMessage('Registration successful'); showScreen('user-login'); }
       else showMessage(result.msg, true);
     });
-  };
-}
-
-function initAdminLogin() {
-  document.getElementById('adminLoginBack').onclick = () => showScreen('admin-entry');
-  document.getElementById('adminLoginForm').onsubmit = (e) => {
-    e.preventDefault();
-    const email = document.getElementById('adminLoginEmail').value.trim();
-    const password = document.getElementById('adminLoginPassword').value;
-    const baseResult = loginAdmin(email, password);
-    if (!baseResult.ok) {
-      showMessage(baseResult.msg || 'Login failed', true);
-      return;
-    }
-    currentAdmin = baseResult.admin;
-    showMessage('Login successful');
-    showScreen('admin-dashboard');
-    loadAdminDashboard();
   };
 }
 
@@ -631,7 +860,6 @@ function loadAdminDashboard() {
 }
 
 function initAdminDashboard() {
-  document.getElementById('adminLogout').onclick = () => { currentAdmin = null; showScreen('admin-entry'); };
   document.getElementById('adminAddBookForm').onsubmit = (e) => {
     e.preventDefault();
     const bookId = parseInt(document.getElementById('addBookId').value, 10);
@@ -662,22 +890,8 @@ function initAdminDashboard() {
   };
 }
 
-function initUserEntry() {
-  document.getElementById('userBack').onclick = () => showScreen('home');
-  document.getElementById('userRegisterBtn').onclick = () => showScreen('user-register');
-  document.getElementById('userLoginBtn').onclick = () => showScreen('user-login');
-  const resetBtn = document.getElementById('userResetData');
-  if (resetBtn) {
-    resetBtn.onclick = () => {
-      localStorage.removeItem(STORAGE_KEYS.users);
-      localStorage.removeItem(STORAGE_KEYS.nextUserId);
-      showMessage('User data cleared. You can register a new user now.');
-    };
-  }
-}
-
 function initUserRegister() {
-  document.getElementById('userRegBack').onclick = () => showScreen('user-entry');
+  document.getElementById('userRegBack').onclick = () => showScreen('home');
   document.getElementById('userRegForm').onsubmit = (e) => {
     e.preventDefault();
     const name = document.getElementById('userRegName').value.trim();
@@ -709,32 +923,41 @@ function initUserRegisterOtp() {
   userOtpForm.onsubmit = (e) => {
     e.preventDefault();
     const input = document.getElementById('userOtpInput').value.trim();
-    if (!pendingReg || pendingReg.type !== 'user') { showScreen('user-entry'); return; }
+    if (!pendingReg || pendingReg.type !== 'user') { showScreen('home'); return; }
     verifyOtpWithBackend(pendingReg.email, input).then(verifyResult => {
       if (!verifyResult.ok) { showMessage(verifyResult.msg || 'Invalid OTP', true); return; }
       const result = registerUser(pendingReg.name, pendingReg.email, pendingReg.password);
       pendingReg = null;
-      if (result.ok) { showMessage('Registration successful'); showScreen('user-entry'); }
+      if (result.ok) { showMessage('Registration successful'); showScreen('user-login'); }
       else showMessage(result.msg, true);
     });
   };
 }
 
 function initUserLogin() {
-  document.getElementById('userLoginBack').onclick = () => showScreen('user-entry');
+  document.getElementById('userLoginBack').onclick = () => showScreen('home');
   document.getElementById('userLoginForm').onsubmit = (e) => {
     e.preventDefault();
     const email = document.getElementById('userLoginEmail').value.trim();
     const password = document.getElementById('userLoginPassword').value;
-    const baseResult = loginUser(email, password);
+    const baseResult = loginAny(email, password);
     if (!baseResult.ok) {
       showMessage(baseResult.msg || 'Login failed', true);
+      return;
+    }
+    if (baseResult.type === 'admin') {
+      currentAdmin = baseResult.admin;
+      showMessage('Login successful');
+      showScreen('admin-dashboard');
+      loadAdminDashboard();
+      updateNav();
       return;
     }
     currentUser = baseResult.user;
     showMessage('Login successful');
     showScreen('user-dashboard');
     loadUserDashboard();
+    updateNav();
   };
 }
 
@@ -774,7 +997,6 @@ function loadUserDashboard() {
 }
 
 function initUserDashboard() {
-  document.getElementById('userLogout').onclick = () => { currentUser = null; showScreen('user-entry'); };
   document.getElementById('userSearchForm').onsubmit = (e) => {
     e.preventDefault();
     const q = document.getElementById('userSearchQuery').value.trim();
@@ -800,13 +1022,11 @@ function initUserDashboard() {
 // ----- Bootstrap -----
 function init() {
   loadBackendDataFromServer();
+  setSaveStatus('Server offline', true);
+  checkBackend();
   initHome();
-  initAdminEntry();
-  initAdminRegister();
-  initAdminRegisterOtp();
-  initAdminLogin();
+  initNav();
   initAdminDashboard();
-  initUserEntry();
   initUserRegister();
   initUserRegisterOtp();
   initUserLogin();

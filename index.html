@@ -8,8 +8,21 @@
 </head>
 <body>
     <header class="site-header">
-        <h1 class="logo">Smart Library</h1>
-        <p class="tagline">Book discovery & reservation</p>
+        <div class="nav-inner">
+            <div class="brand">
+                <h1 class="logo">Smart Library</h1>
+                <p class="tagline">Book discovery & reservation</p>
+            </div>
+            <nav class="site-nav">
+                <button type="button" id="navHome" class="nav-link">Home</button>
+                <button type="button" id="navAbout" class="nav-link">About</button>
+                <button type="button" id="navLogin" class="nav-link">Login</button>
+                <button type="button" id="navSignup" class="nav-link nav-cta">Sign Up</button>
+                <button type="button" id="navDashboard" class="nav-link" style="display: none;">Dashboard</button>
+                <button type="button" id="navLogout" class="nav-link" style="display: none;">Logout</button>
+            </nav>
+            <div id="saveStatus" class="save-status">Not saved</div>
+        </div>
     </header>
 
     <div id="message" class="message" style="display: none;"></div>
@@ -21,58 +34,96 @@
                 <h2>Welcome</h2>
                 <p>Search books, reserve copies, and manage your library visits.</p>
             </div>
-            <div class="role-buttons">
-                <button type="button" id="goAdmin" class="btn btn-primary">Admin</button>
-                <button type="button" id="goUser" class="btn btn-primary">User</button>
+            <div class="featured-shelf">
+                <div class="shelf-header">
+                    <h3>Featured Titles</h3>
+                    <p>Explore a visual wall of popular reads curated for your library.</p>
+                </div>
+                <div class="shelf-marquee">
+                    <div class="shelf-row marquee-right">
+                        <div class="shelf-track">
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780439554930-L.jpg" alt="Harry Potter and the Sorcerer's Stone cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780061120084-L.jpg" alt="To Kill a Mockingbird cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780743273565-L.jpg" alt="The Great Gatsby cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780451524935-L.jpg" alt="1984 cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780141439518-L.jpg" alt="Pride and Prejudice cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780547928227-L.jpg" alt="The Hobbit cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780316769488-L.jpg" alt="The Catcher in the Rye cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780061122415-L.jpg" alt="The Alchemist cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780375842207-L.jpg" alt="The Book Thief cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780439023528-L.jpg" alt="The Hunger Games cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780062316097-L.jpg" alt="Sapiens cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780735211292-L.jpg" alt="Atomic Habits cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780307277671-L.jpg" alt="The Road cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780307474278-L.jpg" alt="The Girl with the Dragon Tattoo cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780140449136-L.jpg" alt="The Odyssey cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780140449266-L.jpg" alt="The Iliad cover" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780439554930-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780061120084-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780743273565-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780451524935-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780141439518-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780547928227-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780316769488-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780061122415-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780375842207-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780439023528-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780062316097-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780735211292-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780307277671-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780307474278-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780140449136-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780140449266-L.jpg" alt="" loading="lazy"></div>
+                        </div>
+                    </div>
+                    <div class="shelf-row marquee-left">
+                        <div class="shelf-track">
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780441013593-L.jpg" alt="Dune cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780307743657-L.jpg" alt="The Shining cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780307588371-L.jpg" alt="Gone Girl cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780140283334-L.jpg" alt="The Art of War cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780062457714-L.jpg" alt="The Subtle Art of Not Giving a F*ck cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780374533557-L.jpg" alt="Thinking, Fast and Slow cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9781501124020-L.jpg" alt="It Ends with Us cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780142424179-L.jpg" alt="The Fault in Our Stars cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9781594633669-L.jpg" alt="The Girl on the Train cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9781250301697-L.jpg" alt="The Silent Patient cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780804139021-L.jpg" alt="The Martian cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780060850524-L.jpg" alt="Brave New World cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780143058144-L.jpg" alt="Crime and Punishment cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780735219090-L.jpg" alt="Where the Crawdads Sing cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9781524763138-L.jpg" alt="Becoming cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9781594631931-L.jpg" alt="The Kite Runner cover" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780441013593-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780307743657-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780307588371-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780140283334-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780062457714-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780374533557-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9781501124020-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780142424179-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9781594633669-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9781250301697-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780804139021-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780060850524-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780143058144-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780735219090-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9781524763138-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9781594631931-L.jpg" alt="" loading="lazy"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
-        <!-- Admin entry -->
-        <section id="admin-entry" class="screen">
-            <h2>Admin</h2>
-            <div class="card">
-                <button type="button" id="adminRegisterBtn" class="btn btn-block">Register</button>
-                <button type="button" id="adminLoginBtn" class="btn btn-block">Login</button>
-                <button type="button" id="adminBack" class="btn btn-ghost">Back</button>
+        <!-- About -->
+        <section id="about-page" class="screen">
+            <h2>About Smart Library</h2>
+            <div class="card about-page-card about-simple">
+                <h3>Overview</h3>
+                <p>Smart Library is a modern prototype that helps readers discover books fast and helps admins manage collections with clarity. It brings search, availability, and day‑to‑day library workflows into one clean experience. Users can log in, browse, and act quickly without losing context. Admins can keep the catalog accurate with simple add and update flows. The interface focuses on speed, simple navigation, and visual discovery. The project blends a classic C backend with a polished web layer for a practical end‑to‑end demo.</p>
+                <p class="about-remark"> — Sahil (B.Tech, Cybersecurity)</p>
             </div>
-        </section>
-
-        <!-- Admin register -->
-        <section id="admin-register" class="screen">
-            <h2>Admin Register</h2>
-            <form id="adminRegForm" class="card form">
-                <label>Name <input type="text" id="adminRegName" required></label>
-                <label>Library name <input type="text" id="adminRegLib" required></label>
-                <label>Email <input type="email" id="adminRegEmail" required></label>
-                <label>Password <input type="password" id="adminRegPassword" required></label>
-                <button type="submit" class="btn btn-primary">Register</button>
-                <button type="button" id="adminRegBack" class="btn btn-ghost">Back</button>
-            </form>
-        </section>
-
-        <!-- Admin register OTP -->
-        <section id="admin-register-otp" class="screen">
-            <h2>Verify your email</h2>
-            <div class="card">
-                <p>OTP sent to <strong id="adminOtpEmail"></strong></p>
-                <p id="adminOtpDevHint" class="hint">Check your email for the 6-digit OTP code.</p>
-                <form id="adminOtpForm" class="form">
-                    <label>Enter OTP <input type="text" id="adminOtpInput" placeholder="000000" maxlength="6" pattern="[0-9]{6}" required></label>
-                    <button type="submit" class="btn btn-primary">Verify</button>
-                    <button type="button" id="adminOtpBack" class="btn btn-ghost">Back</button>
-                </form>
-            </div>
-        </section>
-
-        <!-- Admin login -->
-        <section id="admin-login" class="screen">
-            <h2>Admin Login</h2>
-            <form id="adminLoginForm" class="card form">
-                <label>Email <input type="email" id="adminLoginEmail" required></label>
-                <label>Password <input type="password" id="adminLoginPassword" required></label>
-                <button type="submit" class="btn btn-primary">Login</button>
-                <button type="button" id="adminLoginBack" class="btn btn-ghost">Back</button>
-            </form>
         </section>
 
         <!-- Admin dashboard -->
@@ -84,7 +135,6 @@
                 <p><strong>Library:</strong> <span id="adminInfoLib"></span></p>
                 <p><strong>ID:</strong> <span id="adminInfoId"></span></p>
                 <p><strong>Email:</strong> <span id="adminInfoEmail"></span></p>
-                <button type="button" id="adminLogout" class="btn btn-ghost">Logout</button>
             </div>
             <div class="card">
                 <h3>Add book</h3>
@@ -103,20 +153,62 @@
             </div>
         </section>
 
-        <!-- User entry -->
-        <section id="user-entry" class="screen">
-            <h2>User</h2>
-            <div class="card">
-                <button type="button" id="userRegisterBtn" class="btn btn-block">Register</button>
-                <button type="button" id="userLoginBtn" class="btn btn-block">Login</button>
-                <button type="button" id="userBack" class="btn btn-ghost">Back</button>
-            </div>
-        </section>
-
         <!-- User register -->
-        <section id="user-register" class="screen">
+        <section id="user-register" class="screen auth-screen">
+            <div class="auth-backdrop" aria-hidden="true">
+                <div class="shelf-marquee">
+                    <div class="shelf-row marquee-right">
+                        <div class="shelf-track">
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780439554930-L.jpg" alt="Harry Potter and the Sorcerer's Stone cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780061120084-L.jpg" alt="To Kill a Mockingbird cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780743273565-L.jpg" alt="The Great Gatsby cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780451524935-L.jpg" alt="1984 cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780141439518-L.jpg" alt="Pride and Prejudice cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780547928227-L.jpg" alt="The Hobbit cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780316769488-L.jpg" alt="The Catcher in the Rye cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780061122415-L.jpg" alt="The Alchemist cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780375842207-L.jpg" alt="The Book Thief cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780439023528-L.jpg" alt="The Hunger Games cover" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780439554930-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780061120084-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780743273565-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780451524935-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780141439518-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780547928227-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780316769488-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780061122415-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780375842207-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780439023528-L.jpg" alt="" loading="lazy"></div>
+                        </div>
+                    </div>
+                    <div class="shelf-row marquee-left">
+                        <div class="shelf-track">
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780062316097-L.jpg" alt="Sapiens cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780735211292-L.jpg" alt="Atomic Habits cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780307277671-L.jpg" alt="The Road cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780307474278-L.jpg" alt="The Girl with the Dragon Tattoo cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780140449136-L.jpg" alt="The Odyssey cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780140449266-L.jpg" alt="The Iliad cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780441013593-L.jpg" alt="Dune cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780307743657-L.jpg" alt="The Shining cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780307588371-L.jpg" alt="Gone Girl cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780140283334-L.jpg" alt="The Art of War cover" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780062316097-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780735211292-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780307277671-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780307474278-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780140449136-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780140449266-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780441013593-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780307743657-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780307588371-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780140283334-L.jpg" alt="" loading="lazy"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <h2>User Register</h2>
-            <form id="userRegForm" class="card form">
+            <form id="userRegForm" class="card form auth-card">
                 <label>Name <input type="text" id="userRegName" required></label>
                 <label>Email <input type="email" id="userRegEmail" required></label>
                 <label>Password <input type="password" id="userRegPassword" required></label>
@@ -140,9 +232,61 @@
         </section>
 
         <!-- User login -->
-        <section id="user-login" class="screen">
-            <h2>User Login</h2>
-            <form id="userLoginForm" class="card form">
+        <section id="user-login" class="screen auth-screen">
+            <div class="auth-backdrop" aria-hidden="true">
+                <div class="shelf-marquee">
+                    <div class="shelf-row marquee-right">
+                        <div class="shelf-track">
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780439554930-L.jpg" alt="Harry Potter and the Sorcerer's Stone cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780061120084-L.jpg" alt="To Kill a Mockingbird cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780743273565-L.jpg" alt="The Great Gatsby cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780451524935-L.jpg" alt="1984 cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780141439518-L.jpg" alt="Pride and Prejudice cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780547928227-L.jpg" alt="The Hobbit cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780316769488-L.jpg" alt="The Catcher in the Rye cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780061122415-L.jpg" alt="The Alchemist cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780375842207-L.jpg" alt="The Book Thief cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780439023528-L.jpg" alt="The Hunger Games cover" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780439554930-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780061120084-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780743273565-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780451524935-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780141439518-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780547928227-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780316769488-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780061122415-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780375842207-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780439023528-L.jpg" alt="" loading="lazy"></div>
+                        </div>
+                    </div>
+                    <div class="shelf-row marquee-left">
+                        <div class="shelf-track">
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780062316097-L.jpg" alt="Sapiens cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780735211292-L.jpg" alt="Atomic Habits cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780307277671-L.jpg" alt="The Road cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780307474278-L.jpg" alt="The Girl with the Dragon Tattoo cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780140449136-L.jpg" alt="The Odyssey cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780140449266-L.jpg" alt="The Iliad cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780441013593-L.jpg" alt="Dune cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780307743657-L.jpg" alt="The Shining cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780307588371-L.jpg" alt="Gone Girl cover" loading="lazy"></div>
+                            <div class="shelf-item"><img src="https://covers.openlibrary.org/b/isbn/9780140283334-L.jpg" alt="The Art of War cover" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780062316097-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780735211292-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780307277671-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780307474278-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780140449136-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780140449266-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780441013593-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780307743657-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780307588371-L.jpg" alt="" loading="lazy"></div>
+                            <div class="shelf-item" aria-hidden="true"><img src="https://covers.openlibrary.org/b/isbn/9780140283334-L.jpg" alt="" loading="lazy"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <h2>Login</h2>
+            <form id="userLoginForm" class="card form auth-card">
                 <label>Email <input type="email" id="userLoginEmail" required></label>
                 <label>Password <input type="password" id="userLoginPassword" required></label>
                 <button type="submit" class="btn btn-primary">Login</button>
@@ -158,7 +302,6 @@
                 <p><strong>Name:</strong> <span id="userInfoName"></span></p>
                 <p><strong>Email:</strong> <span id="userInfoEmail"></span></p>
                 <p><strong>ID:</strong> <span id="userInfoId"></span></p>
-                <button type="button" id="userLogout" class="btn btn-ghost">Logout</button>
             </div>
             <div class="card">
                 <h3>Search books</h3>
@@ -206,6 +349,10 @@
             </form>
         </div>
     </div>
+
+    <footer class="site-footer">
+        <p>Developed by escxspace</p>
+    </footer>
 
     <script src="app.js"></script>
 </body>

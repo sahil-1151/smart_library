@@ -1,8 +1,8 @@
 1001|IIT Bombay Library|Advanced Algorithms in J|Herbert Schildt|12|8
 1002|Delhi University Library|Mastering Data Structure|Bjarne Stroustrup|15|12
-1003|NIT Trichy Library|Introduction to Machine |Yashavant Kanetkar|6|2
+1003|NIT Trichy Library|Introduction to Machine|Yashavant Kanetkar|6|2
 1004|JNU Knowledge Centre|Programming with Cloud C|E Balagurusamy|10|10
-1005|GEU Central Library|Fundamentals of Cyber Se|Brian Kernighan|14|7
+1005|GEU Central Library|Fundamentals of Cyber Security|Brian Kernighan|15|15
 1006|IIT Bombay Library|The Art of Operating Sys|Andrew Tanenbaum|9|4
 1007|Delhi University Library|Practical Web Developmen|Donald Knuth|11|9
 1008|NIT Trichy Library|Object-Oriented Big Data|Robert Lafore|7|3
@@ -248,7 +248,7 @@
 1248|NIT Trichy Library|Mastering IoT|Pressman|15|14
 1249|JNU Knowledge Centre|Introduction to Compiler|Grady Booch|7|5
 1250|GEU Central Library|Fundamentals of Embedded|Bertrand Meyer|13|10
-1251|IIT Bombay Library|Programming with Mobile |Scott Meyers|5|4
+1251|IIT Bombay Library|Programming with Mobile|Scott Meyers|5|4
 1252|Delhi University Library|The Art of Blockchain|Dennis Ritchie|16|12
 1253|NIT Trichy Library|Practical Web Development|Bjarne Stroustrup|10|7
 1254|JNU Knowledge Centre|Object-Oriented Artifici|Yashavant Kanetkar|12|9
