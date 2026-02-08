@@ -280,7 +280,9 @@ body {
 .shelf-item {
   background: rgba(255, 255, 255, 0.85);
   border-radius: 14px;
-  padding: 0.45rem;
+  padding: 0.35rem;
+  width: 120px;
+  height: 180px;
   box-shadow: var(--shadow-soft);
   border: 1px solid rgba(255, 255, 255, 0.6);
   transition: transform 0.18s ease, box-shadow 0.18s ease;
@@ -815,6 +817,11 @@ body {
 
   .shelf-row.marquee-left {
     --marquee-duration: 44s;
+  }
+
+  .shelf-item {
+    width: 96px;
+    height: 144px;
   }
 
   .inline-form {

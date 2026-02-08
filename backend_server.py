@@ -10,6 +10,7 @@ import os
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+SAVE_TOKEN = os.environ.get("SMART_LIBRARY_TOKEN", "").strip()
 ALLOWED_FILES = {
     "data_book.txt",
     "user_login.txt",
@@ -39,6 +40,15 @@ class BackendHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"ok": False, "error": "Not found"}).encode())
             return
+
+        if SAVE_TOKEN:
+            client_token = self.headers.get("X-Auth-Token", "").strip()
+            if client_token != SAVE_TOKEN:
+                self.send_response(403)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": False, "error": "Forbidden"}).encode())
+                return
 
         length = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(length)

@@ -451,6 +451,7 @@ function getIssuedForUser(studentId) {
 const BACKEND_BASE = ''; // same folder as index.html
 const BACKEND_FILES = ['data_book.txt', 'user_login.txt', 'admin_login.txt', 'issue_book.txt', 'queue_book.txt'];
 const BACKEND_SAVE_URL = '/api/save';
+const SAVE_TOKEN = ''; // Optional: set to match SMART_LIBRARY_TOKEN on your VPS
 
 /** Clear all app data from localStorage so backend .txt files are the single source of truth on each load. */
 function clearAppLocalStorage() {
@@ -516,9 +517,11 @@ function syncBackendFiles() {
     'issue_book.txt': serializeIssued(getIssued()),
     'queue_book.txt': serializeQueue(getQueue()),
   };
+  const headers = { 'Content-Type': 'application/json' };
+  if (SAVE_TOKEN) headers['X-Auth-Token'] = SAVE_TOKEN;
   return fetch(BACKEND_SAVE_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ files })
   })
     .then(r => {
