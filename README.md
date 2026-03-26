@@ -90,6 +90,64 @@ Notification system for reservations
 Admin dashboard with analytics
 API-based architecture
 
+🚀 PostgreSQL API (Next Step)
+If you have already migrated the legacy text data into PostgreSQL, the next step is to run the API layer so the frontend and tools can talk to the database directly.
+
+Files added for this:
+- `api_server.py` → Flask + PostgreSQL API
+- `requirements.txt` → Python dependencies
+- `.env.example` → environment variable template
+
+Setup:
+1. Install dependencies:
+   `pip install -r requirements.txt`
+2. Set your database connection string:
+   `export DATABASE_URL="postgresql:///smart_library?user=sahil"`
+3. Start the API:
+   `python3 api_server.py`
+
+Default API URL:
+- `http://127.0.0.1:5000`
+
+Key endpoints:
+- `GET /api/health` → database/API health check
+- `GET /api/libraries` → list libraries
+- `GET /api/books?q=python&library_id=1` → search books
+- `POST /api/auth/register` → create member/admin account
+- `POST /api/auth/login` → login
+- `POST /api/loans` → directly issue a book
+- `POST /api/loans/<loan_id>/return` → return a book
+- `POST /api/borrow-requests` → create borrow request
+- `POST /api/borrow-requests/<id>/review` → approve/reject request
+- `GET /api/visit-slots` → list slot options
+- `POST /api/slot-bookings` → create visit booking
+- `POST /api/waitlist` → join waitlist
+
+Schema assumptions:
+- The API matches the PostgreSQL schema you shared for:
+  `libraries`, `library_aliases`, `users`, `books`, `borrow_requests`, `book_loans`, `visit_slots`, `slot_bookings`, `waitlist_entries`
+- Passwords are stored in `users.password_hash`
+- For legacy migrated users, plain-text passwords are still accepted once and then upgraded to hashed passwords on successful login
+
+Suggested next step after starting the API:
+- Connect `app.js` to these endpoints so the current web UI stops using `localStorage` and starts using PostgreSQL as the source of truth.
+
+📧 Email Server Setup
+The email server reads SMTP credentials from your shell environment or a local `.env` file in the project root.
+
+Example `.env` values:
+- `SMART_LIBRARY_SENDER_EMAIL=yourgmail@gmail.com`
+- `SMART_LIBRARY_APP_PASSWORD=your_16_character_gmail_app_password`
+- `SMART_LIBRARY_SUPPORT_EMAIL=yourgmail@gmail.com`
+
+Start the email server:
+- `python3 email_server.py`
+
+Notes:
+- Use a Gmail App Password, not your normal Gmail password
+- `.env` is ignored by git, so your secrets stay out of version control
+- If SMTP delivery fails, the app can still show a demo OTP when fallback is enabled
+
 📖 Learning Outcomes
 Designed a real-world problem-solving system
 Improved understanding of modular C programming

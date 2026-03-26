@@ -16,6 +16,7 @@
             <nav class="site-nav">
                 <button type="button" id="navHome" class="nav-link">Home</button>
                 <button type="button" id="navAbout" class="nav-link">About</button>
+                <button type="button" id="navContact" class="nav-link">Contact Us</button>
                 <button type="button" id="navLogin" class="nav-link">Login</button>
                 <button type="button" id="navSignup" class="nav-link nav-cta">Sign Up</button>
                 <button type="button" id="navDashboard" class="nav-link" style="display: none;">Dashboard</button>
@@ -121,20 +122,79 @@
             <h2>About Smart Library</h2>
             <div class="card about-page-card about-simple">
                 <h3>Overview</h3>
-                <p>Smart Library is a modern prototype that helps readers discover books fast and helps admins manage collections with clarity. It brings search, availability, and day‑to‑day library workflows into one clean experience. Users can log in, browse, and act quickly without losing context. Admins can keep the catalog accurate with simple add and update flows. The interface focuses on speed, simple navigation, and visual discovery. The project blends a classic C backend with a polished web layer for a practical end‑to‑end demo.</p>
-                <p class="about-remark"> — Sahil (B.Tech, Cybersecurity)</p>
+                <p>Smart Library is a modern prototype that helps readers discover books fast and helps admins manage collections with clarity. It brings search, availability, and day-to-day library workflows into one clean experience. Users can log in, browse, and act quickly without losing context. Admins can keep the catalog accurate with simple add and update flows. The interface focuses on speed, simple navigation, and visual discovery. The project blends a classic C backend with a polished web layer for a practical end-to-end demo.</p>
+                <p class="about-remark"> - Sahil (B.Tech, Cybersecurity)</p>
+            </div>
+        </section>
+
+        <!-- Contact -->
+        <section id="contact-page" class="screen">
+            <h2>Contact Us</h2>
+            <div class="contact-layout">
+                <div class="card contact-card">
+                    <h3>Send a message</h3>
+                    <p>Use this form if you need help with login issues, book requests, reservations, or general support.</p>
+                    <form id="contactForm" class="form">
+                        <label>Your email <input type="email" id="contactEmail" placeholder="name@gmail.com" autocomplete="email" required></label>
+                        <label>Subject <input type="text" id="contactSubject" maxlength="120" required></label>
+                        <label>Message <textarea id="contactBody" rows="7" required></textarea></label>
+                        <button type="submit" class="btn btn-primary">Send message</button>
+                    </form>
+                </div>
+                <div class="card contact-card contact-address">
+                    <h3>Delhi Support Desk</h3>
+                    <p><strong>Smart Library Support Office</strong></p>
+                    <p>4th Floor, Meridian House<br>Barakhamba Lane, Connaught Place<br>New Delhi, Delhi 110001</p>
+                    <p><strong>Office Hours:</strong> Monday to Saturday, 10:00 AM to 6:00 PM</p>
+                    <p><strong>Quick note:</strong> Messages sent through the form above reach the support inbox directly.</p>
+                </div>
             </div>
         </section>
 
         <!-- Admin dashboard -->
         <section id="admin-dashboard" class="screen">
             <h2>Admin Dashboard</h2>
-            <div class="card">
-                <h3>Your info</h3>
-                <p><strong>Name:</strong> <span id="adminInfoName"></span></p>
-                <p><strong>Library:</strong> <span id="adminInfoLib"></span></p>
-                <p><strong>ID:</strong> <span id="adminInfoId"></span></p>
-                <p><strong>Email:</strong> <span id="adminInfoEmail"></span></p>
+            <div class="card dashboard-profile-card">
+                <div class="dashboard-profile">
+                    <div class="dashboard-avatar dashboard-avatar-admin" aria-hidden="true">A</div>
+                    <div class="dashboard-profile-copy">
+                        <span class="dashboard-profile-label">Admin dashboard</span>
+                        <strong id="adminInfoName"></strong>
+                        <div class="dashboard-profile-meta">
+                            <span id="adminInfoEmail"></span>
+                            <span>Library: <span id="adminInfoLib"></span></span>
+                            <span>ID: <span id="adminInfoId"></span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card dashboard-shortcuts-card">
+                <div class="section-header">
+                    <h3>Quick Access</h3>
+                    <span class="section-toggle-meta">Open admin sections</span>
+                </div>
+                <div class="shortcut-grid">
+                    <button type="button" class="shortcut-tile" data-admin-screen-open="admin-issue-requests-screen">
+                        <span class="shortcut-icon" aria-hidden="true">IR</span>
+                        <span class="shortcut-label">Issue Requests</span>
+                    </button>
+                    <button type="button" class="shortcut-tile" data-admin-screen-open="admin-purchase-requests-screen">
+                        <span class="shortcut-icon" aria-hidden="true">PR</span>
+                        <span class="shortcut-label">Purchase Requests</span>
+                    </button>
+                    <button type="button" class="shortcut-tile" data-admin-screen-open="admin-loans-screen">
+                        <span class="shortcut-icon" aria-hidden="true">LN</span>
+                        <span class="shortcut-label">Approved Loans</span>
+                    </button>
+                    <button type="button" class="shortcut-tile" data-admin-screen-open="admin-slot-bookings-screen">
+                        <span class="shortcut-icon" aria-hidden="true">SB</span>
+                        <span class="shortcut-label">Slot Requests</span>
+                    </button>
+                    <button type="button" class="shortcut-tile" data-admin-screen-open="admin-approved-slots-screen">
+                        <span class="shortcut-icon" aria-hidden="true">AS</span>
+                        <span class="shortcut-label">Approved Slots</span>
+                    </button>
+                </div>
             </div>
             <div class="card">
                 <h3>Add book</h3>
@@ -142,14 +202,174 @@
                     <label>Book ID <input type="number" id="addBookId" min="1" required></label>
                     <label>Title <input type="text" id="addBookTitle" required></label>
                     <label>Author <input type="text" id="addBookAuthor" required></label>
+                    <label>Price <input type="number" id="addBookPrice" min="300" max="600" step="0.01" placeholder="Auto"></label>
                     <label>Total copies <input type="number" id="addBookTotal" min="1" required></label>
+                    <label>Issue copies <input type="number" id="addBookIssueTotal" min="0" required></label>
+                    <label>Slot-booking copies <input type="number" id="addBookSlotCopies" min="0" required></label>
                     <button type="submit" class="btn btn-primary">Add</button>
                 </form>
             </div>
-            <div class="card">
+            <div class="card dashboard-scroll-card">
                 <h3>Books in your library</h3>
-                <div id="adminBooksList" class="books-grid"></div>
+                <div id="adminBooksList" class="books-grid scroll-panel-grid"></div>
                 <div id="adminBooksListPager" class="pager"></div>
+            </div>
+        </section>
+
+        <section id="admin-issue-requests-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-admin-screen-back="admin-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Pending Borrow Requests</h2>
+            <div class="card dashboard-scroll-card">
+                <div id="adminIssueRequestsList" class="module-list scroll-panel-list"></div>
+            </div>
+        </section>
+
+        <section id="admin-purchase-requests-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-admin-screen-back="admin-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Pending Purchase Requests</h2>
+            <div class="card dashboard-scroll-card">
+                <div id="adminPurchaseRequestsList" class="module-list scroll-panel-list"></div>
+            </div>
+        </section>
+
+        <section id="admin-loans-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-admin-screen-back="admin-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Approved Loans</h2>
+            <div class="card card-collapsible dashboard-scroll-card">
+                <div class="section-header">
+                    <h3>Approved loans</h3>
+                    <span id="approvedLoansCount" class="section-toggle-meta">0 active</span>
+                </div>
+                <div class="toolbar-row">
+                    <label class="toolbar-label">Search user <input type="text" id="adminIssuedUserSearch" placeholder="Name, email, or user ID"></label>
+                </div>
+                <div id="approvedLoansPanel" class="slide-panel">
+                    <div id="adminIssuedBooksList" class="module-list scroll-panel-list"></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="admin-slot-bookings-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-admin-screen-back="admin-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Slot Requests</h2>
+            <div class="card dashboard-scroll-card">
+                <div id="adminSlotBookingsList" class="module-list scroll-panel-list"></div>
+            </div>
+        </section>
+
+        <section id="admin-approved-slots-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-admin-screen-back="admin-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Approved Slots</h2>
+            <div class="card dashboard-scroll-card">
+                <div id="adminApprovedSlotBookingsList" class="module-list scroll-panel-list"></div>
+            </div>
+        </section>
+
+        <!-- Developer dashboard -->
+        <section id="developer-dashboard" class="screen">
+            <h2>Developer Dashboard</h2>
+            <div class="card dashboard-profile-card">
+                <div class="dashboard-profile">
+                    <div class="dashboard-avatar dashboard-avatar-developer" aria-hidden="true">D</div>
+                    <div class="dashboard-profile-copy">
+                        <span class="dashboard-profile-label">Developer dashboard</span>
+                        <strong id="developerInfoName"></strong>
+                        <div class="dashboard-profile-meta">
+                            <span id="developerInfoEmail"></span>
+                            <span>Role: <span id="developerInfoRole"></span></span>
+                            <span>ID: <span id="developerInfoId"></span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Platform overview</h3>
+                <div class="stats-grid">
+                    <div class="stat-chip">
+                        <span class="stat-label">Active now</span>
+                        <strong id="developerActiveUsersCount">0</strong>
+                    </div>
+                    <div class="stat-chip">
+                        <span class="stat-label">Total users</span>
+                        <strong id="developerTotalUsersCount">0</strong>
+                    </div>
+                    <div class="stat-chip">
+                        <span class="stat-label">Members</span>
+                        <strong id="developerMemberUsersCount">0</strong>
+                    </div>
+                    <div class="stat-chip">
+                        <span class="stat-label">Admins</span>
+                        <strong id="developerAdminUsersCount">0</strong>
+                    </div>
+                    <div class="stat-chip">
+                        <span class="stat-label">Developers</span>
+                        <strong id="developerDeveloperUsersCount">0</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="card dashboard-shortcuts-card">
+                <div class="section-header">
+                    <h3>Quick Access</h3>
+                    <span class="section-toggle-meta">Open developer sections</span>
+                </div>
+                <div class="shortcut-grid">
+                    <button type="button" class="shortcut-tile" data-developer-screen-open="developer-users-screen">
+                        <span class="shortcut-icon" aria-hidden="true">UA</span>
+                        <span class="shortcut-label">User Activity</span>
+                    </button>
+                    <button type="button" class="shortcut-tile" data-developer-screen-open="developer-logs-screen">
+                        <span class="shortcut-icon" aria-hidden="true">AP</span>
+                        <span class="shortcut-label">API Activity</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section id="developer-users-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-developer-screen-back="developer-dashboard">Back to dashboard</button>
+            </div>
+            <h2>User Activity Status</h2>
+            <div class="card dashboard-scroll-card">
+                <div class="dashboard-scroll-frame">
+                    <div class="toolbar-row">
+                        <label class="toolbar-label">Search user <input type="text" id="developerUserSearch" placeholder="Name, email, role, or user ID"></label>
+                        <label class="toolbar-label">Status
+                            <select id="developerUserStatusFilter">
+                                <option value="">All statuses</option>
+                                <option value="active">Active now</option>
+                                <option value="idle">Idle</option>
+                                <option value="disabled">Disabled</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div id="developerUsersActivityList" class="module-list scroll-panel-list"></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="developer-logs-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-developer-screen-back="developer-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Recent API Activity</h2>
+            <div class="card dashboard-scroll-card">
+                <div class="dashboard-scroll-frame">
+                    <div class="toolbar-row">
+                        <label class="toolbar-label">Search logs <input type="text" id="developerLogSearch" placeholder="Email, path, action, session, status"></label>
+                    </div>
+                    <div id="developerActivityLogList" class="module-list scroll-panel-list"></div>
+                </div>
             </div>
         </section>
 
@@ -290,44 +510,154 @@
                 <label>Email <input type="email" id="userLoginEmail" required></label>
                 <label>Password <input type="password" id="userLoginPassword" required></label>
                 <button type="submit" class="btn btn-primary">Login</button>
+                <button type="button" id="userForgotPassword" class="btn btn-secondary">Forgot Password</button>
                 <button type="button" id="userLoginBack" class="btn btn-ghost">Back</button>
+            </form>
+        </section>
+
+        <!-- User forgot password OTP -->
+        <section id="user-forgot-otp" class="screen">
+            <h2>Reset password</h2>
+            <div class="card">
+                <p>OTP sent to <strong id="forgotOtpEmail"></strong></p>
+                <p id="forgotOtpDevHint" class="hint">Check your email for the 6-digit OTP code.</p>
+                <form id="forgotOtpForm" class="form">
+                    <label>Enter OTP <input type="text" id="forgotOtpInput" placeholder="000000" maxlength="6" pattern="[0-9]{6}" required></label>
+                    <button type="submit" class="btn btn-primary">Verify OTP</button>
+                    <button type="button" id="forgotOtpBack" class="btn btn-ghost">Back</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- User forgot password reset -->
+        <section id="user-reset-password" class="screen">
+            <h2>Set a new password</h2>
+            <form id="resetPasswordForm" class="card form auth-card">
+                <label>New Password <input type="password" id="resetPasswordValue" required></label>
+                <button type="submit" class="btn btn-primary">Update Password</button>
+                <button type="button" id="resetPasswordBack" class="btn btn-ghost">Back</button>
             </form>
         </section>
 
         <!-- User dashboard -->
         <section id="user-dashboard" class="screen">
             <h2>User Dashboard</h2>
-            <div class="card">
-                <h3>Your info</h3>
-                <p><strong>Name:</strong> <span id="userInfoName"></span></p>
-                <p><strong>Email:</strong> <span id="userInfoEmail"></span></p>
-                <p><strong>ID:</strong> <span id="userInfoId"></span></p>
+            <div class="card dashboard-profile-card">
+                <div class="dashboard-profile">
+                    <div class="dashboard-avatar dashboard-avatar-user" aria-hidden="true">U</div>
+                    <div class="dashboard-profile-copy">
+                        <span class="dashboard-profile-label">User dashboard</span>
+                        <strong id="userInfoName"></strong>
+                        <div class="dashboard-profile-meta">
+                            <span id="userInfoEmail"></span>
+                            <span>ID: <span id="userInfoId"></span></span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card">
-                <h3>Search books</h3>
-                <form id="userSearchForm" class="form inline-form">
-                    <label>
+            <div class="card dashboard-shortcuts-card">
+                <div class="section-header">
+                    <h3>Quick Access</h3>
+                    <span class="section-toggle-meta">Open other sections</span>
+                </div>
+                <div class="shortcut-grid">
+                    <button type="button" class="shortcut-tile" data-user-screen-open="user-issued-screen">
+                        <span class="shortcut-icon" aria-hidden="true">LN</span>
+                        <span class="shortcut-label">Issued Books</span>
+                    </button>
+                    <button type="button" class="shortcut-tile" data-user-screen-open="user-issue-requests-screen">
+                        <span class="shortcut-icon" aria-hidden="true">IR</span>
+                        <span class="shortcut-label">Issue Requests</span>
+                    </button>
+                    <button type="button" class="shortcut-tile" data-user-screen-open="user-purchase-requests-screen">
+                        <span class="shortcut-icon" aria-hidden="true">PR</span>
+                        <span class="shortcut-label">Purchase Requests</span>
+                    </button>
+                    <button type="button" class="shortcut-tile" data-user-screen-open="user-slot-bookings-screen">
+                        <span class="shortcut-icon" aria-hidden="true">SB</span>
+                        <span class="shortcut-label">Slot Requests</span>
+                    </button>
+                    <button type="button" class="shortcut-tile" data-user-screen-open="user-approved-slots-screen">
+                        <span class="shortcut-icon" aria-hidden="true">AS</span>
+                        <span class="shortcut-label">Approved Slots</span>
+                    </button>
+                </div>
+            </div>
+            <div class="card dashboard-scroll-card">
+                <h3>All books</h3>
+                <form id="userSearchForm" class="form inline-form dashboard-book-search">
+                    <label class="dashboard-book-search-filter">
                         By
                         <select id="userSearchBy">
                             <option value="title">Title</option>
                             <option value="author">Author</option>
                             <option value="id">ID</option>
+                            <option value="library">Library</option>
                         </select>
                     </label>
-                    <label>Query <input type="text" id="userSearchQuery" placeholder="Search..."></label>
+                    <label class="dashboard-book-search-query">Query <input type="text" id="userSearchQuery" placeholder="Search..."></label>
+                    <label class="dashboard-book-search-filter">
+                        Library
+                        <select id="userLibraryFilter">
+                            <option value="">All libraries</option>
+                        </select>
+                    </label>
                     <button type="submit" class="btn btn-primary">Search</button>
                 </form>
-                <div id="userSearchResults" class="books-grid"></div>
-                <div id="userSearchResultsPager" class="pager"></div>
-            </div>
-            <div class="card">
-                <h3>All books</h3>
-                <div id="userBooksList" class="books-grid"></div>
+                <div id="userBooksList" class="books-grid scroll-panel-grid"></div>
                 <div id="userBooksListPager" class="pager"></div>
             </div>
-            <div class="card">
-                <h3>Your issued books</h3>
-                <div id="userIssuedList" class="books-grid"></div>
+        </section>
+
+        <section id="user-issued-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-user-screen-back="user-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Your Issued Books</h2>
+            <div class="card dashboard-scroll-card">
+                <div id="userIssuedList" class="books-grid scroll-panel-grid"></div>
+            </div>
+        </section>
+
+        <section id="user-issue-requests-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-user-screen-back="user-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Books Applied For Issue</h2>
+            <div class="card dashboard-scroll-card">
+                <p>Requested books will appear here until the admin approves or rejects them.</p>
+                <div id="userIssueRequestsList" class="module-list scroll-panel-list"></div>
+            </div>
+        </section>
+
+        <section id="user-purchase-requests-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-user-screen-back="user-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Books Applied For Purchase</h2>
+            <div class="card dashboard-scroll-card">
+                <p>Purchase requests stay here until the library approves, rejects, or you cancel them.</p>
+                <div id="userPurchaseRequestsList" class="module-list scroll-panel-list"></div>
+            </div>
+        </section>
+
+        <section id="user-slot-bookings-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-user-screen-back="user-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Your Slot Requests</h2>
+            <div class="card dashboard-scroll-card">
+                <div id="userSlotBookingsList" class="module-list scroll-panel-list"></div>
+            </div>
+        </section>
+
+        <section id="user-approved-slots-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-user-screen-back="user-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Your Approved Slots</h2>
+            <div class="card dashboard-scroll-card">
+                <div id="userApprovedSlotBookingsList" class="module-list scroll-panel-list"></div>
             </div>
         </section>
     </main>
@@ -341,6 +671,9 @@
                 <label>Book ID <span id="editBookId" class="edit-book-id"></span></label>
                 <label>Title <input type="text" id="editBookTitle" required></label>
                 <label>Author <input type="text" id="editBookAuthor" required></label>
+                <label>Issue copies available <input type="number" id="editBookAvailable" min="0" required></label>
+                <label>Issue copy limit <input type="number" id="editBookIssueTotal" min="0" required></label>
+                <label>Slot-booking copies <input type="number" id="editBookSlotCopies" min="0" required></label>
                 <label>Total copies <input type="number" id="editBookTotal" min="0" required></label>
                 <div class="modal-actions">
                     <button type="submit" class="btn btn-primary">Save</button>
@@ -350,10 +683,49 @@
         </div>
     </div>
 
+    <div id="slotBookingModal" class="modal" aria-hidden="true">
+        <div class="modal-backdrop" data-close="slotBookingModal"></div>
+        <div class="modal-content card">
+            <h3>Book a visit slot</h3>
+            <p id="slotBookingBookLabel" class="modal-copy"></p>
+            <p id="slotBookingAvailability" class="hint"></p>
+            <form id="slotBookingForm" class="form">
+                <label>Date <input type="date" id="slotBookingDate" required></label>
+                <label>
+                    Time slot
+                    <select id="slotBookingSlot" required></select>
+                </label>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Confirm Slot</button>
+                    <button type="button" id="slotBookingCancel" class="btn btn-ghost">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="slotCancelOtpModal" class="modal" aria-hidden="true">
+        <div class="modal-backdrop" data-close="slotCancelOtpModal"></div>
+        <div class="modal-content card">
+            <h3>Cancel slot booking</h3>
+            <p id="slotCancelBookingLabel" class="modal-copy"></p>
+            <p class="hint">We will send a random OTP to your email before cancelling the booking.</p>
+            <p id="slotCancelOtpHint" class="otp-dev-hint" style="display: none;"></p>
+            <form id="slotCancelOtpForm" class="form">
+                <label>Enter OTP <input type="text" id="slotCancelOtpInput" inputmode="numeric" maxlength="6" placeholder="6-digit OTP" required></label>
+                <div class="modal-actions">
+                    <button type="button" id="slotCancelSendOtp" class="btn btn-primary">Send OTP</button>
+                    <button type="submit" class="btn">Verify & Cancel</button>
+                    <button type="button" id="slotCancelOtpClose" class="btn btn-ghost">Close</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <footer class="site-footer">
         <p>Developed by escxspace</p>
     </footer>
 
+    <script src="config.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

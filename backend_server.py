@@ -7,10 +7,20 @@ Smart Library backend server
 
 import json
 import os
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 SAVE_TOKEN = os.environ.get("SMART_LIBRARY_TOKEN", "").strip()
+API_PROXY_URL = os.environ.get("SMART_LIBRARY_API_PROXY_URL", "http://127.0.0.1:5000").rstrip("/")
+EMAIL_PROXY_URL = os.environ.get("SMART_LIBRARY_EMAIL_PROXY_URL", "http://127.0.0.1:8081").rstrip("/")
+EMAIL_PROXY_PATHS = {
+    "/send_otp",
+    "/verify_otp",
+    "/send_issue_approval",
+    "/send_contact_message",
+}
 ALLOWED_FILES = {
     "data_book.txt",
     "user_login.txt",
@@ -25,48 +35,128 @@ class BackendHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Content-Type, Authorization, X-Smart-Library-Session, "
+            "X-Smart-Library-Actor-Id, X-Smart-Library-Actor-Role, X-Smart-Library-Actor-Email",
+        )
         super().end_headers()
+
+    def _normalized_path(self):
+        return self.path.split("?", 1)[0]
+
+    def _is_api_proxy_path(self):
+        normalized = self._normalized_path()
+        return normalized == "/api" or normalized.startswith("/api/")
+
+    def _is_email_proxy_path(self):
+        return self._normalized_path() in EMAIL_PROXY_PATHS
+
+    def _send_json(self, status, payload):
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(payload).encode())
+
+    def _read_request_body(self):
+        length = int(self.headers.get("Content-Length", 0))
+        return self.rfile.read(length) if length > 0 else None
+
+    def _copy_response_headers(self, headers):
+        skipped = {
+            "connection",
+            "content-length",
+            "date",
+            "server",
+            "transfer-encoding",
+        }
+        for key, value in headers.items():
+            if key.lower() in skipped:
+                continue
+            self.send_header(key, value)
+
+    def _proxy_request(self, base_url):
+        target_url = f"{base_url}{self.path}"
+        body = self._read_request_body() if self.command in {"POST", "PUT", "PATCH"} else None
+        upstream_request = urllib_request.Request(target_url, data=body, method=self.command)
+
+        # Forward the headers the local API/email servers need.
+        for header_name in (
+            "Accept",
+            "Content-Type",
+            "Authorization",
+            "X-Smart-Library-Session",
+            "X-Smart-Library-Actor-Id",
+            "X-Smart-Library-Actor-Role",
+            "X-Smart-Library-Actor-Email",
+        ):
+            header_value = self.headers.get(header_name)
+            if header_value:
+                upstream_request.add_header(header_name, header_value)
+        client_ip = (self.client_address[0] or "").strip() if self.client_address else ""
+        if client_ip:
+            upstream_request.add_header("X-Forwarded-For", client_ip)
+
+        try:
+            with urllib_request.urlopen(upstream_request, timeout=30) as upstream_response:
+                response_body = upstream_response.read()
+                self.send_response(upstream_response.status)
+                self._copy_response_headers(upstream_response.headers)
+                if "Content-Type" not in upstream_response.headers:
+                    self.send_header("Content-Type", "application/octet-stream")
+                self.end_headers()
+                if response_body:
+                    self.wfile.write(response_body)
+        except urllib_error.HTTPError as exc:
+            response_body = exc.read()
+            self.send_response(exc.code)
+            self._copy_response_headers(exc.headers)
+            if "Content-Type" not in exc.headers:
+                self.send_header("Content-Type", "application/octet-stream")
+            self.end_headers()
+            if response_body:
+                self.wfile.write(response_body)
+        except urllib_error.URLError:
+            service_name = "API" if base_url == API_PROXY_URL else "email"
+            self._send_json(502, {
+                "ok": False,
+                "error": f"Unable to reach local {service_name} service at {base_url}.",
+            })
 
     def do_OPTIONS(self):
         self.send_response(200)
         self.end_headers()
 
     def do_POST(self):
+        if self._is_api_proxy_path() and self._normalized_path() != "/api/save":
+            self._proxy_request(API_PROXY_URL)
+            return
+
+        if self._is_email_proxy_path():
+            self._proxy_request(EMAIL_PROXY_URL)
+            return
+
         if self.path != "/api/save":
-            self.send_response(404)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({"ok": False, "error": "Not found"}).encode())
+            self._send_json(404, {"ok": False, "error": "Not found"})
             return
 
         if SAVE_TOKEN:
             client_token = self.headers.get("X-Auth-Token", "").strip()
             if client_token != SAVE_TOKEN:
-                self.send_response(403)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"ok": False, "error": "Forbidden"}).encode())
+                self._send_json(403, {"ok": False, "error": "Forbidden"})
                 return
 
-        length = int(self.headers.get("Content-Length", 0))
-        raw = self.rfile.read(length)
+        raw = self._read_request_body()
         try:
             payload = json.loads(raw.decode("utf-8") or "{}")
         except json.JSONDecodeError:
-            self.send_response(400)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({"ok": False, "error": "Invalid JSON"}).encode())
+            self._send_json(400, {"ok": False, "error": "Invalid JSON"})
             return
 
         files = payload.get("files", {})
         if not isinstance(files, dict):
-            self.send_response(400)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({"ok": False, "error": "files must be an object"}).encode())
+            self._send_json(400, {"ok": False, "error": "files must be an object"})
             return
 
         written = []
@@ -84,17 +174,26 @@ class BackendHandler(SimpleHTTPRequestHandler):
                 f.write(content)
             written.append(name)
 
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.end_headers()
-        self.wfile.write(json.dumps({"ok": True, "written": written}).encode())
+        self._send_json(200, {"ok": True, "written": written})
+
+    def do_PUT(self):
+        if self._is_api_proxy_path():
+            self._proxy_request(API_PROXY_URL)
+            return
+        self._send_json(404, {"ok": False, "error": "Not found"})
+
+    def do_DELETE(self):
+        if self._is_api_proxy_path():
+            self._proxy_request(API_PROXY_URL)
+            return
+        self._send_json(404, {"ok": False, "error": "Not found"})
 
     def do_GET(self):
+        if self._is_api_proxy_path():
+            self._proxy_request(API_PROXY_URL)
+            return
         if self.path == "/api/ping":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({"ok": True}).encode())
+            self._send_json(200, {"ok": True})
             return
         super().do_GET()
 
@@ -102,12 +201,17 @@ class BackendHandler(SimpleHTTPRequestHandler):
         return
 
 
-def run(port=8000):
-    server = HTTPServer(("", port), BackendHandler)
+def run(port=8080):
+    server = ThreadingHTTPServer(("", port), BackendHandler)
     print(f"Smart Library server running at http://localhost:{port}")
+    print(f"Proxying API requests to {API_PROXY_URL}")
+    print(f"Proxying email requests to {EMAIL_PROXY_URL}")
     print("POST /api/save to persist datasets")
     server.serve_forever()
 
 
 if __name__ == "__main__":
-    run(8000)
+    port = int(os.environ.get("PORT", "8080"))
+    if len(os.sys.argv) > 1:
+        port = int(os.sys.argv[1])
+    run(port)

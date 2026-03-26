@@ -9,7 +9,8 @@
 #include "Linked.h"
 #include "Queue.h"
 #include "Admin.h"
-#include "Admin.h"
+#include "Request.h"
+#include "Slot.h"
 
 struct treenode;
 struct student;
@@ -30,5 +31,11 @@ struct queue *load_queue(struct queue **rear);
 
 void save_admin(struct admin *root);
 struct admin *load_admin(void);
+
+void save_issue_requests(struct request *root);
+struct request *load_issue_requests(void);
+
+void save_slot_bookings(struct slot_booking *root);
+struct slot_booking *load_slot_bookings(void);
 
 #endif

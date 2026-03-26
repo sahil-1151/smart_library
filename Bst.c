@@ -14,7 +14,9 @@ struct treenode * createnode(int book_id,const char *lib,const char *title,const
     strncpy(newnode->author, author, sizeof(newnode->author) - 1);
     newnode->author[sizeof(newnode->author) - 1] = '\0';
     newnode->total_copies=total_copies;
+    newnode->issue_total_copies=total_copies;
     newnode->available_copies=total_copies;
+    newnode->slot_booking_copies=total_copies;
     newnode->left=NULL;
     newnode->right=NULL;
 
@@ -23,7 +25,7 @@ struct treenode * createnode(int book_id,const char *lib,const char *title,const
 
 void view(struct treenode *root){
     if(root==NULL)return;
-    printf("\nBook Id :%d\nTitle : %s\nAuthor : %s\nAvailable copies : %d \n",root->book_id,root->title,root->author,root->available_copies);
+    printf("\nBook Id :%d\nTitle : %s\nAuthor : %s\nIssue Available : %d\nIssue Pool : %d\nSlot Booking Pool : %d\n",root->book_id,root->title,root->author,root->available_copies,root->issue_total_copies,root->slot_booking_copies);
     view(root->left);
     view(root->right);
 }
@@ -45,13 +47,58 @@ struct treenode *insert(struct treenode *root,struct treenode *newnode){
     return root;
 }
 
-void edit(struct treenode *newnode,const char *author,const char *title,int available_copies,int total_copies){
-   strncpy(newnode->title, title, sizeof(newnode->title) - 1);
+void edit(struct treenode *newnode,
+          const char *author,
+          const char *title,
+          int available_copies,
+          int issue_total_copies,
+          int slot_booking_copies,
+          int total_copies){
+    char title_copy[sizeof(newnode->title)];
+    char author_copy[sizeof(newnode->author)];
+
+    if (!newnode || !author || !title) {
+        return;
+    }
+
+    strncpy(title_copy, title, sizeof(title_copy) - 1);
+    title_copy[sizeof(title_copy) - 1] = '\0';
+
+    strncpy(author_copy, author, sizeof(author_copy) - 1);
+    author_copy[sizeof(author_copy) - 1] = '\0';
+
+    strncpy(newnode->title, title_copy, sizeof(newnode->title) - 1);
     newnode->title[sizeof(newnode->title) - 1] = '\0';
-    strncpy(newnode->author, author, sizeof(newnode->author) - 1);
+
+    strncpy(newnode->author, author_copy, sizeof(newnode->author) - 1);
     newnode->author[sizeof(newnode->author) - 1] = '\0';
+
+    if (total_copies < 0) {
+        total_copies = 0;
+    }
+    if (issue_total_copies < 0) {
+        issue_total_copies = 0;
+    }
+    if (issue_total_copies > total_copies) {
+        issue_total_copies = total_copies;
+    }
+    if (available_copies < 0) {
+        available_copies = 0;
+    }
+    if (available_copies > issue_total_copies) {
+        available_copies = issue_total_copies;
+    }
+    if (slot_booking_copies < 0) {
+        slot_booking_copies = 0;
+    }
+    if (slot_booking_copies > total_copies) {
+        slot_booking_copies = total_copies;
+    }
+
     newnode->total_copies=total_copies;
-    newnode->available_copies=total_copies;
+    newnode->issue_total_copies=issue_total_copies;
+    newnode->available_copies=available_copies;
+    newnode->slot_booking_copies=slot_booking_copies;
 }
 
 struct treenode *search_id(struct treenode *root,int book_id){
@@ -87,7 +134,9 @@ int search_string(struct treenode *root,const char *string){
                             printf("      Library     : %s\n",root->lib);
                             printf("      Title       : %s\n",root->title);
                             printf("      Author      : %s\n",root->author);
-                            printf(" Available Copies : %d\n",root->available_copies);
+                            printf(" Issue Available  : %d\n",root->available_copies);
+                            printf(" Issue Pool       : %d\n",root->issue_total_copies);
+                            printf(" Slot Pool        : %d\n",root->slot_booking_copies);
                             found_count=1;
     }
     found_count+=search_string(root->left, string);
@@ -136,7 +185,9 @@ struct treenode *deletenode(struct treenode *root,int book_id){
             strncpy(root->author, temp->author, sizeof(root->author) - 1);
             root->author[sizeof(root->author) - 1] = '\0';
             root->total_copies=temp->total_copies;
+            root->issue_total_copies=temp->issue_total_copies;
             root->available_copies=temp->available_copies;
+            root->slot_booking_copies=temp->slot_booking_copies;
             root->right=deletenode(root->right, temp->book_id);
         }   
     }
@@ -148,7 +199,9 @@ void visit(struct treenode *root){
     printf("Book Id :%d\n",root->book_id);
     printf("Author Name :%s\n",root->author);
     printf("Book Title :%s\n",root->title);
-    printf("Available Copies :%d\n\n",root->available_copies);
+    printf("Issue Available :%d\n",root->available_copies);
+    printf("Issue Pool :%d\n",root->issue_total_copies);
+    printf("Slot Pool :%d\n\n",root->slot_booking_copies);
 }
 
 void visit_lib(struct treenode *root,const char *lib){
@@ -160,7 +213,9 @@ void visit_lib(struct treenode *root,const char *lib){
         printf("      Library     : %s\n",root->lib);
         printf("      Title       : %s\n",root->title);
         printf("      Author      : %s\n",root->author);
-        printf(" Available Copies : %d\n",root->available_copies);
+        printf(" Issue Available  : %d\n",root->available_copies);
+        printf(" Issue Pool       : %d\n",root->issue_total_copies);
+        printf(" Slot Pool        : %d\n",root->slot_booking_copies);
     }
     visit_lib(root->left,lib);
     visit_lib(root->right,lib);
@@ -179,4 +234,3 @@ void free_bst(struct treenode *root){
     free_bst(root->right);
     free(root);
 }
-

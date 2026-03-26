@@ -72,7 +72,7 @@ int authenticate_admin(struct admin *root,const char *email,const char *password
     if(temp == NULL){
         return 0;
     }
-    return strcmp(root->password,password) == 0;
+    return strcmp(temp->password,password) == 0;
 }
 
 void free_admin(struct admin *root){

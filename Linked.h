@@ -43,6 +43,9 @@ int return_book(struct node **top,
                 struct date return_date,
                 int *fine_out);
 
+int is_book_issued_to_student(struct node *root,
+                              int student_id,
+                              int book_id);
 
 int compare_date(struct date d1, struct date d2);
 

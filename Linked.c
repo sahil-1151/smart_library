@@ -150,6 +150,22 @@ int return_book(struct node **top,
     return 0;
 }
 
+int is_book_issued_to_student(struct node *root,
+                              int student_id,
+                              int book_id)
+{
+    while (root) {
+        if (root->student_id == student_id &&
+            root->book_id == book_id) {
+            return 1;
+        }
+
+        root = root->next;
+    }
+
+    return 0;
+}
+
 void free_issue_list(struct node *top) {
     while (top) {
         struct node *tmp = top;

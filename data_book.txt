@@ -1,8 +1,8 @@
 1001|IIT Bombay Library|Advanced Algorithms in J|Herbert Schildt|12|8
-1002|Delhi University Library|Mastering Data Structure|Bjarne Stroustrup|15|12
+1002|Delhi University Library|Mastering Data Structure|Bjarne Stroustrup|15|11
 1003|NIT Trichy Library|Introduction to Machine|Yashavant Kanetkar|6|2
-1004|JNU Knowledge Centre|Programming with Cloud C|E Balagurusamy|10|10
-1005|GEU Central Library|Fundamentals of Cyber Security|Brian Kernighan|15|15
+1004|JNU Knowledge Centre|Programming with Cloud C|E Balagurusamy|10|9
+1005|GEU Central Library|Fundamentals of Cyber Security|Brian Kernighan|15|14
 1006|IIT Bombay Library|The Art of Operating Sys|Andrew Tanenbaum|9|4
 1007|Delhi University Library|Practical Web Developmen|Donald Knuth|11|9
 1008|NIT Trichy Library|Object-Oriented Big Data|Robert Lafore|7|3
@@ -12,7 +12,7 @@
 1012|Delhi University Library|Guide to Computer Networ|Galvin|8|1
 1013|NIT Trichy Library|Complete IoT in JavaScri|Joshua Bloch|12|6
 1014|JNU Knowledge Centre|Principles of Embedded S|Martin Fowler|10|8
-1015|GEU Central Library|Real-World Mobile Comput|Eric Gamma|14|14
+1015|GEU Central Library|Real-World Mobile Comput|Eric Gamma|14|13
 1016|IIT Bombay Library|Expert Software Engineer|Ian Sommerville|9|5
 1017|Delhi University Library|Beginning Computer Graph|Pressman|11|3
 1018|NIT Trichy Library|Professional Rust|Grady Booch|7|4
@@ -42,22 +42,22 @@
 1042|Delhi University Library|Fundamentals of C|Dennis Ritchie|10|2
 1043|NIT Trichy Library|Programming with Algorit|Bjarne Stroustrup|12|9
 1044|JNU Knowledge Centre|The Art of Database Syst|Yashavant Kanetkar|8|8
-1045|GEU Central Library|Practical Operating Syst|E Balagurusamy|14|6
+1045|GEU Central Library|Practical Operating Syst|E Balagurusamy|14|5
 1046|IIT Bombay Library|Object-Oriented Cyber Se|Herbert Schildt|9|0
 1047|Delhi University Library|Essential Machine Learni|Brian Kernighan|11|5
 1048|NIT Trichy Library|Modern Cloud Computing|Andrew Tanenbaum|15|12
 1049|JNU Knowledge Centre|Hands-On Big Data in Pyt|Donald Knuth|7|3
-1050|GEU Central Library|Guide to IoT|Robert Lafore|13|13
+1050|GEU Central Library|Guide to IoT|Robert Lafore|13|12
 1051|IIT Bombay Library|Complete Compiler Design|Mark Allen Weiss|5|2
 1052|Delhi University Library|Principles of Embedded S|Cormen|16|10
 1053|NIT Trichy Library|Real-World Mobile Comput|Silberschatz|10|7
 1054|JNU Knowledge Centre|Expert Blockchain|Galvin|12|4
-1055|GEU Central Library|Beginning Web Developmen|Joshua Bloch|8|8
+1055|GEU Central Library|Beginning Web Developmen|Joshua Bloch|8|7
 1056|IIT Bombay Library|Professional Artificial|Martin Fowler|14|11
 1057|Delhi University Library|Advanced Data Structure|Eric Gamma|9|6
 1058|NIT Trichy Library|Learning Software Engine|Ian Sommerville|11|1
 1059|JNU Knowledge Centre|Mastering Computer Graph|Pressman|15|9
-1060|GEU Central Library|Introduction to Rust|Grady Booch|6|5
+1060|GEU Central Library|Introduction to Rust|Grady Booch|6|4
 1061|IIT Bombay Library|Fundamentals of Go|Bertrand Meyer|13|8
 1062|Delhi University Library|Programming with C++|Scott Meyers|10|3
 1063|NIT Trichy Library|The Art of Java|Dennis Ritchie|12|10
@@ -142,12 +142,12 @@
 1142|Delhi University Library|Essential Blockchain|Ian Sommerville|10|4
 1143|NIT Trichy Library|Modern Web Development|Pressman|12|7
 1144|JNU Knowledge Centre|Hands-On Artificial Inte|Grady Booch|8|3
-1145|GEU Central Library|Guide to Data Structures|Bertrand Meyer|14|14
+1145|GEU Central Library|Guide to Data Structures|Bertrand Meyer|14|13
 1146|IIT Bombay Library|Complete Software Engine|Scott Meyers|9|6
 1147|Delhi University Library|Principles of Computer G|Dennis Ritchie|11|1
 1148|NIT Trichy Library|Real-World Rust|Bjarne Stroustrup|15|9
 1149|JNU Knowledge Centre|Expert Go|Yashavant Kanetkar|7|7
-1150|GEU Central Library|Beginning C++|E Balagurusamy|13|11
+1150|GEU Central Library|Beginning C++|E Balagurusamy|13|10
 1151|IIT Bombay Library|Advanced Java|Herbert Schildt|5|0
 1152|Delhi University Library|Learning Python|Brian Kernighan|16|8
 1153|NIT Trichy Library|Mastering Algorithms|Andrew Tanenbaum|10|5
@@ -321,3 +321,4 @@
 1322|Delhi University Library|Learning Software Engine|Donald Knuth|10|3
 1323|NIT Trichy Library|Mastering Computer Graph|Robert Lafore|12|10
 1324|JNU Knowledge Centre|Introduction to Rust|Mark Allen Weiss|8|5
+5|akshit kukreti|sexologist|akshit kukreti|100|100

@@ -12,7 +12,9 @@ int book_id;
     char author[50];
     char lib[50];
     int total_copies;
+    int issue_total_copies;
     int available_copies;
+    int slot_booking_copies;
     struct treenode *left;
     struct treenode *right;
 };
@@ -31,7 +33,13 @@ struct treenode *search_id(struct treenode *root,int book_id);
 
 struct treenode *deletenode(struct treenode *root,int book_id);
 
-void edit(struct treenode *root,const char *author,const char *title,int available_copies,int total_copies);
+void edit(struct treenode *root,
+          const char *author,
+          const char *title,
+          int available_copies,
+          int issue_total_copies,
+          int slot_booking_copies,
+          int total_copies);
 
 struct treenode *findmin(struct treenode *root);
 
