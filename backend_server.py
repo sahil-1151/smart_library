@@ -12,8 +12,38 @@ from urllib import error as urllib_error
 from urllib import request as urllib_request
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def load_local_env_file():
+    """Load a simple .env file from the project root without extra dependencies."""
+    env_path = os.path.join(ROOT_DIR, ".env")
+    if not os.path.exists(env_path):
+        return
+
+    with open(env_path, "r", encoding="utf-8") as env_file:
+        for raw_line in env_file:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[7:].strip()
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key:
+                os.environ.setdefault(key, value)
+
+
+load_local_env_file()
+
+API_PORT = os.environ.get("API_PORT", "5050").strip() or "5050"
 SAVE_TOKEN = os.environ.get("SMART_LIBRARY_TOKEN", "").strip()
-API_PROXY_URL = os.environ.get("SMART_LIBRARY_API_PROXY_URL", "http://127.0.0.1:5000").rstrip("/")
+API_PROXY_URL = os.environ.get(
+    "SMART_LIBRARY_API_PROXY_URL",
+    f"http://127.0.0.1:{API_PORT}",
+).rstrip("/")
 EMAIL_PROXY_URL = os.environ.get("SMART_LIBRARY_EMAIL_PROXY_URL", "http://127.0.0.1:8081").rstrip("/")
 EMAIL_PROXY_PATHS = {
     "/send_otp",

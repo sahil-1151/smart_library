@@ -39,6 +39,138 @@ body {
     linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
 }
 
+html.brand-loader-pending body {
+  overflow: hidden;
+}
+
+.brand-boot {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(700px circle at 20% 18%, rgba(14, 165, 168, 0.22), transparent 54%),
+    radial-gradient(640px circle at 82% 22%, rgba(249, 115, 22, 0.22), transparent 50%),
+    linear-gradient(180deg, rgba(10, 18, 31, 0.82), rgba(10, 18, 31, 0.94));
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 320ms ease, visibility 0s linear 320ms;
+}
+
+html.brand-loader-pending .brand-boot {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+
+.brand-boot.is-leaving {
+  opacity: 0;
+}
+
+.brand-boot-panel {
+  width: min(100%, 29rem);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 30px;
+  padding: 2rem 1.8rem 1.7rem;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05)),
+    rgba(10, 18, 31, 0.28);
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(14px);
+}
+
+.brand-boot-mark {
+  position: relative;
+  width: 6.5rem;
+  height: 6.5rem;
+  margin: 0 auto 1.35rem;
+  display: grid;
+  place-items: center;
+}
+
+.brand-boot-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.brand-boot-ring-a {
+  animation: brandBootOrbit 4.2s linear infinite;
+}
+
+.brand-boot-ring-b {
+  inset: 0.55rem;
+  border-color: rgba(249, 115, 22, 0.32);
+  animation: brandBootOrbitReverse 5.8s linear infinite;
+}
+
+.brand-boot-core {
+  position: relative;
+  z-index: 1;
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-indent: 0.12em;
+  box-shadow: 0 18px 34px rgba(14, 165, 168, 0.28);
+}
+
+.brand-boot-copy {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.brand-boot-kicker {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.brand-boot-copy h2 {
+  margin: 0;
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  line-height: 1.05;
+  font-family: var(--font-display);
+}
+
+.brand-boot-copy p:last-child {
+  max-width: 22rem;
+  margin: 0.75rem auto 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.brand-boot-progress {
+  margin-top: 1.35rem;
+  width: 100%;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.brand-boot-progress span {
+  display: block;
+  width: 48%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(14, 165, 168, 0.2), rgba(14, 165, 168, 0.95), rgba(249, 115, 22, 0.9));
+  animation: brandBootProgress 1.35s ease-in-out infinite;
+}
+
 .site-header,
 .main {
   position: relative;
@@ -899,6 +1031,106 @@ body {
   margin-top: 0.35rem;
 }
 
+.is-skeleton-loading {
+  pointer-events: none;
+}
+
+.skeleton-card {
+  pointer-events: none;
+}
+
+.text-skeleton,
+.skeleton-button,
+.skeleton-pill,
+.skeleton-cover-placeholder {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    110deg,
+    rgba(212, 221, 231, 0.78) 12%,
+    rgba(255, 255, 255, 0.96) 28%,
+    rgba(212, 221, 231, 0.78) 46%
+  );
+  background-size: 220% 100%;
+  animation: skeletonShimmer 1.25s ease-in-out infinite;
+}
+
+.text-skeleton {
+  display: block;
+  height: 0.82rem;
+  margin-top: 0.32rem;
+  border-radius: 999px;
+}
+
+.dashboard-profile-copy .text-skeleton,
+.stat-chip .text-skeleton {
+  margin-top: 0;
+}
+
+.skeleton-button,
+.skeleton-pill {
+  display: inline-flex;
+  min-width: 4.25rem;
+  border-radius: 999px;
+}
+
+.skeleton-button {
+  height: 2rem;
+}
+
+.skeleton-pill {
+  height: 1.65rem;
+}
+
+.skeleton-cover-placeholder {
+  border-radius: 12px;
+  aspect-ratio: 2 / 3;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32), 0 14px 30px rgba(11, 19, 32, 0.16);
+}
+
+.skeleton-card .book-cover::before,
+.skeleton-card .book-cover::after {
+  content: none;
+}
+
+.skeleton-card .book-cover {
+  background: transparent;
+  box-shadow: none;
+}
+
+.skeleton-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+  margin-left: auto;
+}
+
+.skeleton-pager {
+  gap: 0.55rem;
+}
+
+.skeleton-w-xs {
+  width: 4rem;
+}
+
+.skeleton-w-sm {
+  width: 6rem;
+}
+
+.skeleton-w-md {
+  width: 8.75rem;
+}
+
+.skeleton-w-lg {
+  width: 12rem;
+}
+
+.skeleton-w-xl {
+  width: 100%;
+  max-width: 17rem;
+}
+
 .book-slot-summary {
   display: flex;
   flex-direction: column;
@@ -1298,10 +1530,62 @@ body {
   }
 }
 
+@keyframes skeletonShimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: -100% 50%;
+  }
+}
+
+@keyframes brandBootOrbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes brandBootOrbitReverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes brandBootProgress {
+  0% {
+    transform: translateX(-120%);
+  }
+  60% {
+    transform: translateX(120%);
+  }
+  100% {
+    transform: translateX(180%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shelf-track {
     animation: none;
     transform: translateX(0);
+  }
+
+  .text-skeleton,
+  .skeleton-button,
+  .skeleton-pill,
+  .skeleton-cover-placeholder {
+    animation: none;
+  }
+
+  .brand-boot-ring-a,
+  .brand-boot-ring-b,
+  .brand-boot-progress span {
+    animation: none;
   }
 }
 

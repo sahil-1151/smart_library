@@ -89,6 +89,7 @@ CREATE TABLE books (
     title TEXT NOT NULL,
     author TEXT NOT NULL,
     isbn TEXT,
+    read_online_url TEXT,
     total_copies INTEGER NOT NULL,
     issue_total_copies INTEGER NOT NULL,
     available_copies INTEGER NOT NULL,

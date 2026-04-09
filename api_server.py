@@ -15,7 +15,7 @@ It exposes JSON endpoints for the core Smart Library flows:
 Configuration:
     DATABASE_URL       Required PostgreSQL connection string
     API_HOST           Optional, defaults to 127.0.0.1
-    API_PORT           Optional, defaults to 5000
+    API_PORT           Optional, defaults to 5050
     DEFAULT_LOAN_DAYS  Optional, defaults to 14
 """
 
@@ -24,11 +24,13 @@ from __future__ import annotations
 import json
 import os
 import random
+import sys
 from threading import Lock
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from time import monotonic
 from typing import Any
+from urllib.parse import urlencode, urlparse
 
 import psycopg
 from flask import Flask, g, request
@@ -400,6 +402,62 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
+def sanitize_public_read_online_url(value: Any) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    if raw.startswith("/"):
+        return None if raw.startswith("//") else raw
+    parsed = urlparse(raw)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    return raw
+
+
+def normalize_read_online_url(value: Any, field_name: str = "read_online_url") -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    normalized = sanitize_public_read_online_url(raw)
+    if normalized is None:
+        raise ApiError(f"{field_name} must start with http://, https://, or /local-path.", 400)
+    return normalized
+
+
+def build_default_read_online_url(
+    title: str | None,
+    author: str | None,
+    isbn: str | None = None,
+) -> str:
+    query_parts: list[str] = []
+    normalized_isbn = "".join(ch for ch in str(isbn or "") if ch.isalnum())
+    if normalized_isbn:
+        query_parts.append(normalized_isbn)
+    if title:
+        query_parts.append(str(title).strip())
+    if author:
+        query_parts.append(str(author).strip())
+    query = " ".join(part for part in query_parts if part).strip()
+    if not query:
+        return "https://openlibrary.org/"
+    return f"https://openlibrary.org/search?{urlencode({'q': query})}"
+
+
+def hydrate_book_record(book: dict[str, Any] | Any | None) -> dict[str, Any] | None:
+    if book is None:
+        return None
+    payload = dict(book)
+    payload["read_online_url"] = (
+        sanitize_public_read_online_url(payload.get("read_online_url"))
+        or build_default_read_online_url(
+            payload.get("title"),
+            payload.get("author"),
+            payload.get("isbn"),
+        )
+    )
+    return payload
+
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -494,6 +552,12 @@ def ensure_database_features() -> None:
                 """
                 ALTER TABLE books
                 ADD COLUMN IF NOT EXISTS purchase_price NUMERIC(10,2)
+                """
+            )
+            conn.execute(
+                """
+                ALTER TABLE books
+                ADD COLUMN IF NOT EXISTS read_online_url TEXT
                 """
             )
             conn.execute(
@@ -968,7 +1032,7 @@ def fetch_public_user(conn: psycopg.Connection[Any], user_id: int) -> dict[str, 
 
 
 def fetch_book(conn: psycopg.Connection[Any], book_id: int) -> dict[str, Any] | None:
-    return conn.execute(
+    row = conn.execute(
         """
         SELECT
             b.book_id,
@@ -976,6 +1040,7 @@ def fetch_book(conn: psycopg.Connection[Any], book_id: int) -> dict[str, Any] | 
             b.title,
             b.author,
             b.isbn,
+            b.read_online_url,
             b.purchase_price,
             b.total_copies,
             b.issue_total_copies,
@@ -994,6 +1059,7 @@ def fetch_book(conn: psycopg.Connection[Any], book_id: int) -> dict[str, Any] | 
         """,
         (book_id,),
     ).fetchone()
+    return hydrate_book_record(row)
 
 
 def fetch_loan(conn: psycopg.Connection[Any], loan_id: int) -> dict[str, Any] | None:
@@ -1076,6 +1142,7 @@ def fetch_catalog_snapshot(conn: psycopg.Connection[Any]) -> dict[str, Any]:
             b.title,
             b.author,
             b.isbn,
+            b.read_online_url,
             b.purchase_price,
             b.total_copies,
             b.issue_total_copies,
@@ -1105,7 +1172,7 @@ def fetch_catalog_snapshot(conn: psycopg.Connection[Any]) -> dict[str, Any]:
 
     return {
         "libraries": libraries,
-        "books": books,
+        "books": [hydrate_book_record(book) for book in books],
         "visit_slots": visit_slots,
     }
 
@@ -1735,6 +1802,7 @@ def list_books():
                 b.title,
                 b.author,
                 b.isbn,
+                b.read_online_url,
                 b.purchase_price,
                 b.total_copies,
                 b.issue_total_copies,
@@ -1755,7 +1823,7 @@ def list_books():
             """,
             (*params, limit, offset),
         ).fetchall()
-    return success(rows)
+    return success([hydrate_book_record(row) for row in rows])
 
 
 @app.get("/api/books/<int:book_id>")
@@ -1775,6 +1843,7 @@ def create_book():
     title = require_text(payload, "title")
     author = require_text(payload, "author")
     isbn = str(payload.get("isbn", "")).strip() or None
+    read_online_url = normalize_read_online_url(payload.get("read_online_url"))
     purchase_price = payload.get("purchase_price")
     total_copies = parse_int(payload.get("total_copies"), "total_copies", minimum=0)
     issue_total_copies = parse_int(
@@ -1815,13 +1884,14 @@ def create_book():
                         title,
                         author,
                         isbn,
+                        read_online_url,
                         purchase_price,
                         total_copies,
                         issue_total_copies,
                         available_copies,
                         slot_booking_copies
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING book_id
                     """,
                     (
@@ -1830,6 +1900,7 @@ def create_book():
                         title,
                         author,
                         isbn,
+                        read_online_url,
                         purchase_price,
                         total_copies,
                         issue_total_copies,
@@ -1845,13 +1916,14 @@ def create_book():
                         title,
                         author,
                         isbn,
+                        read_online_url,
                         purchase_price,
                         total_copies,
                         issue_total_copies,
                         available_copies,
                         slot_booking_copies
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING book_id
                     """,
                     (
@@ -1859,6 +1931,7 @@ def create_book():
                         title,
                         author,
                         isbn,
+                        read_online_url,
                         purchase_price,
                         total_copies,
                         issue_total_copies,
@@ -1889,6 +1962,7 @@ def update_book(book_id: int):
                 title,
                 author,
                 isbn,
+                read_online_url,
                 purchase_price,
                 total_copies,
                 issue_total_copies,
@@ -1908,6 +1982,9 @@ def update_book(book_id: int):
         next_title = str(payload.get("title", current["title"])).strip()
         next_author = str(payload.get("author", current["author"])).strip()
         next_isbn = str(payload.get("isbn", current["isbn"] or "")).strip() or None
+        next_read_online_url = normalize_read_online_url(
+            payload.get("read_online_url", current["read_online_url"])
+        )
         if "purchase_price" in payload:
             try:
                 next_purchase_price = round(float(payload.get("purchase_price")), 2)
@@ -1973,6 +2050,7 @@ def update_book(book_id: int):
                     title = %s,
                     author = %s,
                     isbn = %s,
+                    read_online_url = %s,
                     purchase_price = %s,
                     total_copies = %s,
                     issue_total_copies = %s,
@@ -1985,6 +2063,7 @@ def update_book(book_id: int):
                     next_title,
                     next_author,
                     next_isbn,
+                    next_read_online_url,
                     next_purchase_price,
                     next_total,
                     next_issue_total,
@@ -3635,10 +3714,22 @@ def cancel_waitlist_entry(waitlist_entry_id: int):
 def run():
     ensure_database_features()
     host = os.environ.get("API_HOST", "0.0.0.0").strip() or "0.0.0.0"
-    port_value = os.environ.get("PORT", "").strip() or os.environ.get("API_PORT", "5000")
+    port_value = os.environ.get("PORT", "").strip() or os.environ.get("API_PORT", "5050")
     port = parse_int(port_value, "PORT", minimum=1)
-    serve(app, host=host, port=port, threads=8)
+    try:
+        serve(app, host=host, port=port, threads=8)
+    except OSError as exc:
+        if getattr(exc, "errno", None) == 48:
+            raise ApiError(
+                f"Port {port} is already in use. Change API_PORT or stop the other service using it.",
+                500,
+            ) from exc
+        raise
 
 
 if __name__ == "__main__":
-    run()
+    try:
+        run()
+    except ApiError as err:
+        print(f"Startup failed: {err.message}", file=sys.stderr)
+        raise SystemExit(1)

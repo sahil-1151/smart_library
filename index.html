@@ -4,9 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Library – Book Discovery & Reservation</title>
+    <script>
+        (function () {
+            try {
+                if (!window.localStorage.getItem('sl_brand_loader_seen_v1')) {
+                    document.documentElement.classList.add('brand-loader-pending');
+                }
+            } catch (_error) {
+                document.documentElement.classList.add('brand-loader-pending');
+            }
+        })();
+    </script>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <div id="brandBootLoader" class="brand-boot" aria-hidden="true">
+        <div class="brand-boot-panel">
+            <div class="brand-boot-mark" aria-hidden="true">
+                <span class="brand-boot-ring brand-boot-ring-a"></span>
+                <span class="brand-boot-ring brand-boot-ring-b"></span>
+                <span class="brand-boot-core">SL</span>
+            </div>
+            <div class="brand-boot-copy">
+                <p class="brand-boot-kicker">Smart Library</p>
+                <h2>Opening the shelves</h2>
+                <p>Preparing your catalog, reader tools, and library dashboard.</p>
+                <div class="brand-boot-progress" aria-hidden="true"><span></span></div>
+            </div>
+        </div>
+    </div>
+
     <header class="site-header">
         <div class="nav-inner">
             <div class="brand">
@@ -16,6 +43,7 @@
             <nav class="site-nav">
                 <button type="button" id="navHome" class="nav-link">Home</button>
                 <button type="button" id="navAbout" class="nav-link">About</button>
+                
                 <button type="button" id="navContact" class="nav-link">Contact Us</button>
                 <button type="button" id="navLogin" class="nav-link">Login</button>
                 <button type="button" id="navSignup" class="nav-link nav-cta">Sign Up</button>
@@ -202,6 +230,7 @@
                     <label>Book ID <input type="number" id="addBookId" min="1" required></label>
                     <label>Title <input type="text" id="addBookTitle" required></label>
                     <label>Author <input type="text" id="addBookAuthor" required></label>
+                    <label>Read online URL <input type="url" id="addBookReadUrl" placeholder="https://openlibrary.org/..."></label>
                     <label>Price <input type="number" id="addBookPrice" min="300" max="600" step="0.01" placeholder="Auto"></label>
                     <label>Total copies <input type="number" id="addBookTotal" min="1" required></label>
                     <label>Issue copies <input type="number" id="addBookIssueTotal" min="0" required></label>
@@ -671,6 +700,7 @@
                 <label>Book ID <span id="editBookId" class="edit-book-id"></span></label>
                 <label>Title <input type="text" id="editBookTitle" required></label>
                 <label>Author <input type="text" id="editBookAuthor" required></label>
+                <label>Read online URL <input type="url" id="editBookReadUrl" placeholder="https://openlibrary.org/..."></label>
                 <label>Issue copies available <input type="number" id="editBookAvailable" min="0" required></label>
                 <label>Issue copy limit <input type="number" id="editBookIssueTotal" min="0" required></label>
                 <label>Slot-booking copies <input type="number" id="editBookSlotCopies" min="0" required></label>

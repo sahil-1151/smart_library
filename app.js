@@ -18,6 +18,8 @@ const STORAGE_KEYS = {
 
 const runtimeConfig = window.SMART_LIBRARY_CONFIG || {};
 const AUDIT_SESSION_STORAGE_KEY = 'sl_audit_session_id';
+const BRAND_LOADER_STORAGE_KEY = 'sl_brand_loader_seen_v1';
+const BRAND_LOADER_MIN_DURATION_MS = 1450;
 
 function normalizeBaseUrl(value) {
   const raw = String(value || '').trim();
@@ -28,6 +30,58 @@ function normalizeBaseUrl(value) {
 function joinBaseUrl(base, path) {
   const normalizedPath = String(path || '').startsWith('/') ? path : `/${path}`;
   return base ? `${base}${normalizedPath}` : normalizedPath;
+}
+
+function sanitizeExternalUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('/')) {
+    return raw.startsWith('//') ? '' : raw;
+  }
+  try {
+    const parsed = new URL(raw);
+    if (!/^https?:$/i.test(parsed.protocol)) return '';
+    return parsed.toString();
+  } catch (_error) {
+    return '';
+  }
+}
+
+function normalizeBookReadOnlineInput(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return { ok: true, value: '' };
+  const normalized = sanitizeExternalUrl(raw);
+  if (!normalized) {
+    return { ok: false, value: '', msg: 'Read online URL must start with http://, https://, or /local-path.' };
+  }
+  return { ok: true, value: normalized };
+}
+
+function buildReadOnlineFallbackUrl(book = {}) {
+  const queryParts = [];
+  const normalizedIsbn = String(book.isbn || '').replace(/[^0-9A-Za-z]/g, '').trim();
+  if (normalizedIsbn) queryParts.push(normalizedIsbn);
+  if (book.title) queryParts.push(String(book.title).trim());
+  if (book.author) queryParts.push(String(book.author).trim());
+  const query = queryParts.join(' ').trim();
+  if (!query) return 'https://openlibrary.org/';
+  return `https://openlibrary.org/search?${new URLSearchParams({ q: query }).toString()}`;
+}
+
+function getBookReadOnlineUrl(book) {
+  if (!book) return '';
+  return sanitizeExternalUrl(book.read_online_url) || buildReadOnlineFallbackUrl(book);
+}
+
+function isLocalOriginalReadUrl(url) {
+  return String(url || '').startsWith('/original_books/');
+}
+
+function renderReadOnlineAction(book, label = '') {
+  const url = getBookReadOnlineUrl(book);
+  if (!url) return '';
+  const resolvedLabel = label || (isLocalOriginalReadUrl(url) ? 'Read Original' : 'Read Online');
+  return `<a class="btn btn-sm btn-ghost" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(resolvedLabel)}</a>`;
 }
 
 const apiState = {
@@ -188,6 +242,7 @@ function toBookModel(book) {
     title: book.title || '',
     author: book.author || '',
     isbn: book.isbn || '',
+    read_online_url: book.read_online_url || '',
     purchase_price: Number(book.purchase_price) || 0,
     total_copies: Number(book.total_copies) || 0,
     issue_total_copies: Number(book.issue_total_copies ?? book.total_copies) || 0,
@@ -537,6 +592,7 @@ function parseDataBook(text) {
         issue_total_copies: issueTotalCopies,
         available_copies: availableCopies,
         slot_booking_copies: slotBookingCopies,
+        read_online_url: (parts[8] || '').trim(),
       });
     }
   }
@@ -1123,7 +1179,17 @@ async function resetUserPassword(email, newPassword) {
 }
 
 // ----- Books -----
-async function addBook(bookId, lib, title, author, totalCopies, issueTotalCopies, slotBookingCopies, purchasePrice = null) {
+async function addBook(
+  bookId,
+  lib,
+  title,
+  author,
+  totalCopies,
+  issueTotalCopies,
+  slotBookingCopies,
+  purchasePrice = null,
+  readOnlineUrl = ''
+) {
   try {
     const library = resolveLibrary(lib);
     if (!library) {
@@ -1136,6 +1202,7 @@ async function addBook(bookId, lib, title, author, totalCopies, issueTotalCopies
         library_id: library.library_id,
         title,
         author,
+        read_online_url: readOnlineUrl || null,
         purchase_price: purchasePrice,
         total_copies: totalCopies,
         issue_total_copies: issueTotalCopies,
@@ -1162,13 +1229,17 @@ async function deleteBook(bookId) {
   }
 }
 
-async function editBook(bookId, { title, author, available_copies, issue_total_copies, slot_booking_copies, total_copies, purchase_price }) {
+async function editBook(
+  bookId,
+  { title, author, available_copies, issue_total_copies, slot_booking_copies, total_copies, purchase_price, read_online_url }
+) {
   try {
     const updated = toBookModel(await apiFetch(`/api/books/${bookId}`, {
       method: 'PUT',
       body: JSON.stringify({
         title,
         author,
+        read_online_url,
         available_copies,
         issue_total_copies,
         slot_booking_copies,
@@ -1929,6 +2000,8 @@ let developerDashboardLoadPromise = null;
 let catalogLoadedAt = 0;
 let currentSlotBookingBookId = null;
 let pendingSlotCancellationBooking = null;
+let brandLoaderStartedAt = 0;
+let brandLoaderClosingPromise = null;
 const userBookSearchState = {
   searchType: 'title',
   query: '',
@@ -1938,6 +2011,7 @@ const adminAddBookDraft = {
   bookId: '',
   title: '',
   author: '',
+  readOnlineUrl: '',
   price: '',
   total: '',
   issueTotal: '',
@@ -1948,6 +2022,16 @@ const dashboardRenderState = {
   user: Object.create(null),
   admin: Object.create(null),
   developer: Object.create(null),
+};
+const dashboardHydrationState = {
+  user: false,
+  admin: false,
+  developer: false,
+};
+const DASHBOARD_SKELETON_SECTIONS = {
+  user: ['profile', 'books', 'issued', 'requests', 'purchaseRequests', 'slotBookings', 'approvedSlots'],
+  admin: ['profile', 'books', 'requests', 'purchaseRequests', 'approvedLoans', 'slotBookings', 'approvedSlots'],
+  developer: ['profile', 'stats', 'users', 'logs'],
 };
 
 const USER_DASHBOARD_POLL_INTERVAL_MS = 2000;
@@ -1994,13 +2078,24 @@ function updateNav() {
 }
 
 function resetDashboardRenderState(scope) {
-  if (scope === 'user' || scope === 'admin') {
+  if (scope === 'user' || scope === 'admin' || scope === 'developer') {
     dashboardRenderState[scope] = Object.create(null);
+    dashboardHydrationState[scope] = false;
     return;
   }
   dashboardRenderState.user = Object.create(null);
   dashboardRenderState.admin = Object.create(null);
   dashboardRenderState.developer = Object.create(null);
+  dashboardHydrationState.user = false;
+  dashboardHydrationState.admin = false;
+  dashboardHydrationState.developer = false;
+}
+
+function clearDashboardSectionRenderState(scope, keys = []) {
+  const bucket = dashboardRenderState[scope] || (dashboardRenderState[scope] = Object.create(null));
+  keys.forEach(key => {
+    delete bucket[key];
+  });
 }
 
 function renderDashboardSection(scope, key, signature, renderFn) {
@@ -2028,6 +2123,7 @@ function buildBooksSignature(books) {
       book.slot_booking_copies,
       book.total_copies,
       book.lib,
+      book.read_online_url,
     ].join('|')
   );
 }
@@ -2131,9 +2227,235 @@ function setTextIfChanged(id, value) {
   const el = document.getElementById(id);
   if (!el) return;
   const next = String(value ?? '');
-  if (el.textContent !== next) {
+  if (el.dataset.loadingSkeleton === 'true' || el.textContent !== next) {
     el.textContent = next;
+    delete el.dataset.loadingSkeleton;
+    el.removeAttribute('aria-busy');
   }
+}
+
+function setLoadingRegion(target, isLoading) {
+  const el = typeof target === 'string' ? document.getElementById(target) : target;
+  if (!el) return;
+  el.classList.toggle('is-skeleton-loading', !!isLoading);
+  if (isLoading) {
+    el.setAttribute('aria-busy', 'true');
+  } else {
+    el.removeAttribute('aria-busy');
+  }
+}
+
+function setTextSkeleton(id, widthClass = 'skeleton-w-md') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.dataset.loadingSkeleton = 'true';
+  el.setAttribute('aria-busy', 'true');
+  el.innerHTML = `<span class="text-skeleton ${widthClass}" aria-hidden="true"></span>`;
+}
+
+function skeletonLine(widthClass = 'skeleton-w-md', extraClass = '') {
+  return `<span class="text-skeleton ${widthClass}${extraClass ? ` ${extraClass}` : ''}" aria-hidden="true"></span>`;
+}
+
+function skeletonButton(widthClass = 'skeleton-w-sm') {
+  return `<span class="skeleton-button ${widthClass}" aria-hidden="true"></span>`;
+}
+
+function skeletonPill(widthClass = 'skeleton-w-sm') {
+  return `<span class="skeleton-pill ${widthClass}" aria-hidden="true"></span>`;
+}
+
+function renderPagerSkeleton(pagerId, count = 4) {
+  const pagerEl = document.getElementById(pagerId);
+  if (!pagerEl) return;
+  setLoadingRegion(pagerEl, true);
+  const items = Array.from({ length: count }, (_, index) =>
+    index === 0 || index === count - 1
+      ? skeletonButton('skeleton-w-sm')
+      : skeletonButton('skeleton-w-xs')
+  ).join('');
+  pagerEl.innerHTML = `<div class="pager-inner skeleton-pager" aria-hidden="true">${items}</div>`;
+}
+
+function renderBooksSkeleton(containerId, options = {}) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const count = options.count || 6;
+  setLoadingRegion(container, true);
+  container.innerHTML = Array.from({ length: count }, () => `
+    <div class="book-card skeleton-card" aria-hidden="true">
+      <div class="book-cover skeleton-cover-placeholder"></div>
+      <div class="book-meta">
+        ${skeletonLine('skeleton-w-xs')}
+        ${skeletonLine('skeleton-w-lg')}
+        ${skeletonLine('skeleton-w-md')}
+        ${skeletonLine('skeleton-w-md')}
+        ${skeletonLine('skeleton-w-sm')}
+        ${skeletonLine('skeleton-w-xl')}
+        <div class="book-actions skeleton-actions">
+          ${skeletonButton('skeleton-w-md')}
+          ${skeletonButton('skeleton-w-md')}
+        </div>
+      </div>
+    </div>
+  `).join('');
+  if (options.pagerId) {
+    renderPagerSkeleton(options.pagerId, options.pagerCount || 4);
+  }
+}
+
+function renderModuleListSkeleton(containerId, options = {}) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const count = options.count || 4;
+  const lineWidths = Array.isArray(options.lineWidths) && options.lineWidths.length
+    ? options.lineWidths
+    : ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-xl', 'skeleton-w-md'];
+  const actionWidths = Array.isArray(options.actionWidths) ? options.actionWidths : ['skeleton-w-sm'];
+  const leadingPill = options.leadingPill === false ? '' : skeletonPill(options.pillWidth || 'skeleton-w-sm');
+  const cardClass = options.cardClass ? ` ${options.cardClass}` : '';
+  setLoadingRegion(container, true);
+  container.innerHTML = Array.from({ length: count }, () => `
+    <div class="issued-card module-card skeleton-card${cardClass}" aria-hidden="true">
+      <div class="module-copy">
+        ${lineWidths.map(width => skeletonLine(width)).join('')}
+      </div>
+      ${(leadingPill || actionWidths.length) ? `
+        <div class="module-actions skeleton-actions">
+          ${leadingPill}
+          ${actionWidths.map(width => skeletonButton(width)).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+function renderDashboardProfileSkeleton(scope) {
+  if (scope === 'admin') {
+    setTextSkeleton('adminInfoName', 'skeleton-w-lg');
+    setTextSkeleton('adminInfoEmail', 'skeleton-w-lg');
+    setTextSkeleton('adminInfoLib', 'skeleton-w-md');
+    setTextSkeleton('adminInfoId', 'skeleton-w-xs');
+    return;
+  }
+  if (scope === 'developer') {
+    setTextSkeleton('developerInfoName', 'skeleton-w-lg');
+    setTextSkeleton('developerInfoEmail', 'skeleton-w-lg');
+    setTextSkeleton('developerInfoRole', 'skeleton-w-sm');
+    setTextSkeleton('developerInfoId', 'skeleton-w-xs');
+    return;
+  }
+  setTextSkeleton('userInfoName', 'skeleton-w-lg');
+  setTextSkeleton('userInfoEmail', 'skeleton-w-lg');
+  setTextSkeleton('userInfoId', 'skeleton-w-xs');
+}
+
+function renderDeveloperStatsSkeleton() {
+  [
+    'developerActiveUsersCount',
+    'developerTotalUsersCount',
+    'developerMemberUsersCount',
+    'developerAdminUsersCount',
+    'developerDeveloperUsersCount',
+  ].forEach(id => setTextSkeleton(id, 'skeleton-w-sm'));
+}
+
+function showDashboardSkeleton(scope, keys) {
+  const activeKeys = Array.isArray(keys) && keys.length
+    ? keys
+    : (DASHBOARD_SKELETON_SECTIONS[scope] || []);
+  clearDashboardSectionRenderState(scope, activeKeys);
+
+  activeKeys.forEach(key => {
+    if (key === 'profile') {
+      renderDashboardProfileSkeleton(scope);
+      return;
+    }
+    if (scope === 'developer' && key === 'stats') {
+      renderDeveloperStatsSkeleton();
+      return;
+    }
+    if (scope === 'admin') {
+      if (key === 'books') renderBooksSkeleton('adminBooksList', { pagerId: 'adminBooksListPager' });
+      else if (key === 'requests') {
+        renderModuleListSkeleton('adminIssueRequestsList', {
+          lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-xl', 'skeleton-w-md'],
+          actionWidths: ['skeleton-w-sm', 'skeleton-w-sm'],
+        });
+      } else if (key === 'purchaseRequests') {
+        renderModuleListSkeleton('adminPurchaseRequestsList', {
+          lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-xl', 'skeleton-w-md'],
+          actionWidths: ['skeleton-w-sm', 'skeleton-w-sm'],
+        });
+      } else if (key === 'approvedLoans') {
+        setTextSkeleton('approvedLoansCount', 'skeleton-w-sm');
+        renderModuleListSkeleton('adminIssuedBooksList', {
+          lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-xl', 'skeleton-w-md'],
+          actionWidths: [],
+          leadingPill: false,
+        });
+      } else if (key === 'slotBookings') {
+        renderModuleListSkeleton('adminSlotBookingsList', {
+          lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-sm', 'skeleton-w-xl', 'skeleton-w-md'],
+          actionWidths: ['skeleton-w-sm', 'skeleton-w-sm'],
+        });
+      } else if (key === 'approvedSlots') {
+        renderModuleListSkeleton('adminApprovedSlotBookingsList', {
+          lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-sm', 'skeleton-w-xl'],
+          actionWidths: [],
+        });
+      }
+      return;
+    }
+    if (scope === 'developer') {
+      if (key === 'users') {
+        renderModuleListSkeleton('developerUsersActivityList', {
+          count: 5,
+          cardClass: 'activity-card',
+          lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-md', 'skeleton-w-xl'],
+          actionWidths: [],
+        });
+      } else if (key === 'logs') {
+        renderModuleListSkeleton('developerActivityLogList', {
+          count: 6,
+          cardClass: 'activity-card',
+          lineWidths: ['skeleton-w-md', 'skeleton-w-xl', 'skeleton-w-lg', 'skeleton-w-xl'],
+          actionWidths: [],
+          leadingPill: false,
+        });
+      }
+      return;
+    }
+    if (key === 'books') {
+      renderBooksSkeleton('userBooksList', { pagerId: 'userBooksListPager' });
+    } else if (key === 'issued') {
+      renderModuleListSkeleton('userIssuedList', {
+        lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-xl', 'skeleton-w-md'],
+        actionWidths: ['skeleton-w-sm'],
+        leadingPill: false,
+      });
+    } else if (key === 'requests') {
+      renderModuleListSkeleton('userIssueRequestsList', {
+        lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-xl', 'skeleton-w-md'],
+        actionWidths: ['skeleton-w-sm'],
+      });
+    } else if (key === 'purchaseRequests') {
+      renderModuleListSkeleton('userPurchaseRequestsList', {
+        lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-xl', 'skeleton-w-md'],
+        actionWidths: ['skeleton-w-sm'],
+      });
+    } else if (key === 'slotBookings') {
+      renderModuleListSkeleton('userSlotBookingsList', {
+        lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-sm', 'skeleton-w-xl'],
+        actionWidths: ['skeleton-w-sm'],
+      });
+    } else if (key === 'approvedSlots') {
+      renderModuleListSkeleton('userApprovedSlotBookingsList', {
+        lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-sm', 'skeleton-w-xl'],
+        actionWidths: ['skeleton-w-sm'],
+      });
+    }
+  });
 }
 
 function prefillContactEmailField() {
@@ -2173,10 +2495,59 @@ function syncUserBookSearchStateFromControls() {
   userBookSearchState.libraryFilter = getSelectedLibraryFilter();
 }
 
+function initBrandLoader() {
+  const loader = document.getElementById('brandBootLoader');
+  const isPending = document.documentElement.classList.contains('brand-loader-pending');
+  brandLoaderStartedAt = isPending ? Date.now() : 0;
+  if (!loader) return;
+  loader.setAttribute('aria-hidden', isPending ? 'false' : 'true');
+}
+
+function markBrandLoaderSeen() {
+  try {
+    window.localStorage.setItem(BRAND_LOADER_STORAGE_KEY, '1');
+  } catch (_error) {
+    // Ignore storage failures and allow the loader to appear again later.
+  }
+}
+
+async function releaseBrandLoader(force = false) {
+  if (brandLoaderClosingPromise) {
+    return brandLoaderClosingPromise;
+  }
+
+  const loader = document.getElementById('brandBootLoader');
+  const isPending = document.documentElement.classList.contains('brand-loader-pending');
+  if (!loader || !isPending) {
+    if (loader) loader.setAttribute('aria-hidden', 'true');
+    return;
+  }
+
+  const elapsed = brandLoaderStartedAt > 0 ? Date.now() - brandLoaderStartedAt : 0;
+  const remaining = force ? 0 : Math.max(0, BRAND_LOADER_MIN_DURATION_MS - elapsed);
+
+  brandLoaderClosingPromise = new Promise(resolve => {
+    window.setTimeout(() => {
+      loader.classList.add('is-leaving');
+      window.setTimeout(() => {
+        document.documentElement.classList.remove('brand-loader-pending');
+        loader.classList.remove('is-leaving');
+        loader.setAttribute('aria-hidden', 'true');
+        markBrandLoaderSeen();
+        brandLoaderClosingPromise = null;
+        resolve();
+      }, 360);
+    }, remaining);
+  });
+
+  return brandLoaderClosingPromise;
+}
+
 function resetAdminAddBookDraft() {
   adminAddBookDraft.bookId = '';
   adminAddBookDraft.title = '';
   adminAddBookDraft.author = '';
+  adminAddBookDraft.readOnlineUrl = '';
   adminAddBookDraft.price = '';
   adminAddBookDraft.total = '';
   adminAddBookDraft.issueTotal = '';
@@ -2188,6 +2559,7 @@ function syncAdminAddBookDraftFromControls() {
   adminAddBookDraft.bookId = document.getElementById('addBookId')?.value || '';
   adminAddBookDraft.title = document.getElementById('addBookTitle')?.value || '';
   adminAddBookDraft.author = document.getElementById('addBookAuthor')?.value || '';
+  adminAddBookDraft.readOnlineUrl = document.getElementById('addBookReadUrl')?.value || '';
   adminAddBookDraft.price = document.getElementById('addBookPrice')?.value || '';
   adminAddBookDraft.total = document.getElementById('addBookTotal')?.value || '';
   adminAddBookDraft.issueTotal = document.getElementById('addBookIssueTotal')?.value || '';
@@ -2202,6 +2574,7 @@ function syncAdminAddBookControls() {
       bookId: adminAddBookDraft.bookId,
       title: adminAddBookDraft.title,
       author: adminAddBookDraft.author,
+      readOnlineUrl: adminAddBookDraft.readOnlineUrl,
       price: adminAddBookDraft.price,
       total: adminAddBookDraft.total,
       issueTotal: adminAddBookDraft.issueTotal,
@@ -2211,6 +2584,7 @@ function syncAdminAddBookControls() {
       bookId: nextGeneratedBookId,
       title: '',
       author: '',
+      readOnlineUrl: '',
       price: '',
       total: '',
       issueTotal: '',
@@ -2225,6 +2599,7 @@ function syncAdminAddBookControls() {
     ['addBookId', values.bookId],
     ['addBookTitle', values.title],
     ['addBookAuthor', values.author],
+    ['addBookReadUrl', values.readOnlineUrl],
     ['addBookPrice', values.price],
     ['addBookTotal', values.total],
     ['addBookIssueTotal', values.issueTotal],
@@ -2341,9 +2716,9 @@ async function pollActiveDashboard() {
 
   dashboardPollInFlight = true;
   try {
-    if (target === 'admin') await loadAdminDashboard();
-    else if (target === 'developer') await loadDeveloperDashboard();
-    else await loadUserDashboard();
+    if (target === 'admin') await loadAdminDashboard({ showSkeleton: false });
+    else if (target === 'developer') await loadDeveloperDashboard({ showSkeleton: false });
+    else await loadUserDashboard({ showSkeleton: false });
     setSaveStatus('API online');
   } catch (error) {
     console.error('Dashboard polling failed:', error);
@@ -2505,11 +2880,13 @@ function bookCoverDataUri(book) {
 function renderBooksList(containerId, books, options = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
+  const pagerEl = options.pagerId ? document.getElementById(options.pagerId) : null;
+  setLoadingRegion(container, false);
+  if (pagerEl) setLoadingRegion(pagerEl, false);
   if (!books || books.length === 0) {
     container.innerHTML = '<p class="empty">No books found.</p>';
     container._lastBooks = [];
     container._lastOptions = options;
-    const pagerEl = options.pagerId ? document.getElementById(options.pagerId) : null;
     if (pagerEl) pagerEl.innerHTML = '';
     return;
   }
@@ -2526,6 +2903,7 @@ function renderBooksList(containerId, books, options = {}) {
 
   container.innerHTML = slice.map(b => {
     const coverUrl = bookCoverDataUri(b);
+    const readOnlineAction = renderReadOnlineAction(b);
     const openSlotBooking = options.showSlot && currentUser
       ? getOpenSlotBookingForBook(currentUser.id, b.book_id)
       : null;
@@ -2562,6 +2940,7 @@ function renderBooksList(containerId, books, options = {}) {
           ${options.showRequest ? `<button type="button" class="btn btn-sm" data-request="${b.book_id}">Request Issue</button>` : ''}
           ${options.showPurchase ? `<button type="button" class="btn btn-sm" data-purchase="${b.book_id}">Request Purchase</button>` : ''}
           ${slotAction}
+          ${readOnlineAction}
           ${options.showEdit ? `<button type="button" class="btn btn-sm" data-edit="${b.book_id}">Edit</button>` : ''}
           ${options.showDelete ? `<button type="button" class="btn btn-sm danger" data-delete="${b.book_id}">Delete</button>` : ''}
         </div>
@@ -2598,7 +2977,6 @@ function renderBooksList(containerId, books, options = {}) {
 
   // No external cover fetch; all covers are generated locally.
 
-  const pagerEl = options.pagerId ? document.getElementById(options.pagerId) : null;
   if (pagerEl && options.pagination && totalPages > 1) {
     let pagerHtml = '<div class="pager-inner"><span class="pager-label">Page </span>';
     const go = (p) => {
@@ -2643,6 +3021,7 @@ function requestStatusClass(status) {
 function renderIssueRequestsList(containerId, requests, options = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
+  setLoadingRegion(container, false);
 
   if (!requests || requests.length === 0) {
     container.innerHTML = `<p class="empty">${escapeHtml(options.emptyText || 'No pending requests.')}</p>`;
@@ -2651,6 +3030,7 @@ function renderIssueRequestsList(containerId, requests, options = {}) {
 
   container.innerHTML = requests.map((request, index) => {
     const book = searchBooksById(request.book_id);
+    const readOnlineAction = renderReadOnlineAction(book);
     const user = getUserById(request.student_id);
     const userName = request.user_name || (user ? user.name : 'Unknown user');
     const userEmail = request.user_email || (user ? user.email : 'No email');
@@ -2669,6 +3049,7 @@ function renderIssueRequestsList(containerId, requests, options = {}) {
         </div>
         <div class="module-actions">
           ${statusLabel ? `<span class="status-pill ${requestStatusClass(statusLabel)}">${escapeHtml(statusLabel)}</span>` : ''}
+          ${readOnlineAction}
           ${options.showApprove ? `<button type="button" class="btn btn-sm" data-approve="${index}">Approve</button>` : ''}
           ${options.showReject ? `<button type="button" class="btn btn-sm danger" data-reject="${index}">Reject</button>` : ''}
           ${options.showCancel && String(request.status || '').toLowerCase() === 'pending' ? `<button type="button" class="btn btn-sm danger" data-cancel-request="${index}">Cancel Request</button>` : ''}
@@ -2708,6 +3089,7 @@ function renderIssueRequestsList(containerId, requests, options = {}) {
 function renderPurchaseRequestsList(containerId, requests, options = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
+  setLoadingRegion(container, false);
 
   if (!requests || requests.length === 0) {
     container.innerHTML = `<p class="empty">${escapeHtml(options.emptyText || 'No purchase requests found.')}</p>`;
@@ -2716,6 +3098,7 @@ function renderPurchaseRequestsList(containerId, requests, options = {}) {
 
   container.innerHTML = requests.map((request, index) => {
     const book = searchBooksById(request.book_id);
+    const readOnlineAction = renderReadOnlineAction(book);
     const user = getUserById(request.student_id);
     const userName = request.user_name || (user ? user.name : 'Unknown user');
     const userEmail = request.user_email || (user ? user.email : 'No email');
@@ -2734,6 +3117,7 @@ function renderPurchaseRequestsList(containerId, requests, options = {}) {
         </div>
         <div class="module-actions">
           ${statusLabel ? `<span class="status-pill ${requestStatusClass(statusLabel)}">${escapeHtml(statusLabel)}</span>` : ''}
+          ${readOnlineAction}
           ${options.showApprove ? `<button type="button" class="btn btn-sm" data-approve-purchase="${index}">Approve</button>` : ''}
           ${options.showReject ? `<button type="button" class="btn btn-sm danger" data-reject-purchase="${index}">Reject</button>` : ''}
           ${options.showCancel && String(request.status || '').toLowerCase() === 'pending' ? `<button type="button" class="btn btn-sm danger" data-cancel-purchase="${index}">Cancel Request</button>` : ''}
@@ -2773,6 +3157,7 @@ function renderPurchaseRequestsList(containerId, requests, options = {}) {
 function renderSlotBookingsList(containerId, slotBookings, options = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
+  setLoadingRegion(container, false);
 
   if (!slotBookings || slotBookings.length === 0) {
     container.innerHTML = `<p class="empty">${escapeHtml(options.emptyText || 'No slot bookings found.')}</p>`;
@@ -2781,6 +3166,7 @@ function renderSlotBookingsList(containerId, slotBookings, options = {}) {
 
   container.innerHTML = slotBookings.map((booking, index) => {
     const book = searchBooksById(booking.book_id);
+    const readOnlineAction = renderReadOnlineAction(book);
     const user = getUserById(booking.student_id);
     const userName = booking.user_name || (user ? user.name : 'Unknown user');
     const userEmail = booking.user_email || (user ? user.email : 'No email');
@@ -2804,6 +3190,7 @@ function renderSlotBookingsList(containerId, slotBookings, options = {}) {
         </div>
         <div class="module-actions">
           <span class="status-pill ${requestStatusClass(statusLabel)}">${escapeHtml(statusLabel)}</span>
+          ${readOnlineAction}
           ${options.showApprove && isPending ? `<button type="button" class="btn btn-sm" data-approve-slot="${index}">Approve</button>` : ''}
           ${options.showReject && isPending ? `<button type="button" class="btn btn-sm danger" data-reject-slot="${index}">Reject</button>` : ''}
           ${options.showCancel && canCancel ? `<button type="button" class="btn btn-sm danger" data-cancel-slot="${index}">Cancel Slot</button>` : ''}
@@ -2843,6 +3230,7 @@ function renderSlotBookingsList(containerId, slotBookings, options = {}) {
 function renderIssuedRecordsList(containerId, issuedRecords, options = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
+  setLoadingRegion(container, false);
 
   if (!issuedRecords || issuedRecords.length === 0) {
     container.innerHTML = `<p class="empty">${escapeHtml(options.emptyText || 'No issued books found.')}</p>`;
@@ -2851,6 +3239,7 @@ function renderIssuedRecordsList(containerId, issuedRecords, options = {}) {
 
   container.innerHTML = issuedRecords.map(record => {
     const book = searchBooksById(record.book_id);
+    const readOnlineAction = renderReadOnlineAction(book);
     const user = getUserById(record.student_id);
     const userName = record.user_name || (user ? user.name : 'Unknown user');
     const userEmail = record.user_email || (user ? user.email : 'No email');
@@ -2865,6 +3254,9 @@ function renderIssuedRecordsList(containerId, issuedRecords, options = {}) {
           <div class="module-meta">${escapeHtml(lib)}</div>
           <div class="module-meta">Issue period: ${formatDate(record.issue_date)} to ${formatDate(record.due_date)}</div>
         </div>
+        <div class="module-actions">
+          ${readOnlineAction}
+        </div>
       </div>
     `;
   }).join('');
@@ -2873,6 +3265,7 @@ function renderIssuedRecordsList(containerId, issuedRecords, options = {}) {
 function renderDeveloperUsersList(containerId, users) {
   const container = document.getElementById(containerId);
   if (!container) return;
+  setLoadingRegion(container, false);
 
   if (!users || users.length === 0) {
     container.innerHTML = '<p class="empty">No user activity found.</p>';
@@ -2918,6 +3311,7 @@ function summarizeDeveloperLogResponse(value) {
 function renderDeveloperLogsList(containerId, logs) {
   const container = document.getElementById(containerId);
   if (!container) return;
+  setLoadingRegion(container, false);
 
   if (!logs || logs.length === 0) {
     container.innerHTML = '<p class="empty">No audit log entries found yet.</p>';
@@ -2952,10 +3346,8 @@ function setApprovedLoansPanelState(isOpen) {
 }
 
 function updateApprovedLoansSummary(records) {
-  const summary = document.getElementById('approvedLoansCount');
-  if (!summary) return;
   const count = Array.isArray(records) ? records.length : 0;
-  summary.textContent = `${count} active`;
+  setTextIfChanged('approvedLoansCount', `${count} active`);
 }
 
 // ----- Screens -----
@@ -3123,6 +3515,7 @@ function openEditBookModal(bookId) {
   document.getElementById('editBookId').textContent = '#' + book.book_id;
   document.getElementById('editBookTitle').value = book.title || '';
   document.getElementById('editBookAuthor').value = book.author || '';
+  document.getElementById('editBookReadUrl').value = book.read_online_url || '';
   document.getElementById('editBookAvailable').value = String(book.available_copies ?? 0);
   document.getElementById('editBookIssueTotal').value = String(book.issue_total_copies ?? 0);
   document.getElementById('editBookSlotCopies').value = String(book.slot_booking_copies ?? 0);
@@ -3137,9 +3530,13 @@ function closeEditBookModal() {
   if (modal) { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); }
 }
 
-async function loadAdminDashboard() {
+async function loadAdminDashboard(options = {}) {
   if (!currentAdmin) return;
   if (adminDashboardLoadPromise) return adminDashboardLoadPromise;
+  const shouldShowSkeleton = options.showSkeleton ?? !dashboardHydrationState.admin;
+  if (shouldShowSkeleton) {
+    showDashboardSkeleton('admin', options.skeletonKeys);
+  }
 
   adminDashboardLoadPromise = (async () => {
     await refreshCatalogData();
@@ -3313,6 +3710,7 @@ async function loadAdminDashboard() {
 
   try {
     await adminDashboardLoadPromise;
+    dashboardHydrationState.admin = true;
   } finally {
     adminDashboardLoadPromise = null;
   }
@@ -3346,6 +3744,7 @@ function initAdminDashboard() {
     const bookId = parseInt(document.getElementById('addBookId').value, 10);
     const title = document.getElementById('addBookTitle').value.trim();
     const author = document.getElementById('addBookAuthor').value.trim();
+    const readOnlineUrlRaw = document.getElementById('addBookReadUrl').value.trim();
     const priceValue = document.getElementById('addBookPrice').value.trim();
     const total = parseInt(document.getElementById('addBookTotal').value, 10);
     const issueTotal = parseInt(document.getElementById('addBookIssueTotal').value, 10);
@@ -3360,7 +3759,22 @@ function initAdminDashboard() {
         showMessage('Enter a valid price or leave it blank for auto pricing.', true);
         return;
       }
-      if (await addBook(bookId, currentAdmin.lib, title, author, total, issueTotal, slotCopies, price)) {
+      const readOnlineUrlResult = normalizeBookReadOnlineInput(readOnlineUrlRaw);
+      if (!readOnlineUrlResult.ok) {
+        showMessage(readOnlineUrlResult.msg, true);
+        return;
+      }
+      if (await addBook(
+        bookId,
+        currentAdmin.lib,
+        title,
+        author,
+        total,
+        issueTotal,
+        slotCopies,
+        price,
+        readOnlineUrlResult.value
+      )) {
         showMessage('Book added');
         resetAdminAddBookDraft();
         await loadAdminDashboard();
@@ -3382,7 +3796,7 @@ function initAdminDashboard() {
   if (adminIssuedUserSearch) {
     adminIssuedUserSearch.addEventListener('input', () => {
       delete dashboardRenderState.admin.approvedLoans;
-      void loadAdminDashboard();
+      void loadAdminDashboard({ showSkeleton: true, skeletonKeys: ['approvedLoans'] });
     });
   }
   const editModal = document.getElementById('editBookModal');
@@ -3396,6 +3810,7 @@ function initAdminDashboard() {
     const bookId = parseInt(document.getElementById('editBookForm').dataset.editBookId || '0', 10);
     const title = document.getElementById('editBookTitle').value.trim();
     const author = document.getElementById('editBookAuthor').value.trim();
+    const readOnlineUrlRaw = document.getElementById('editBookReadUrl').value.trim();
     const available = parseInt(document.getElementById('editBookAvailable').value, 10);
     const issueTotal = parseInt(document.getElementById('editBookIssueTotal').value, 10);
     const slotCopies = parseInt(document.getElementById('editBookSlotCopies').value, 10);
@@ -3405,9 +3820,15 @@ function initAdminDashboard() {
       return;
     }
     runWithButtonLoading(submitButton, 'Saving...', async () => {
+      const readOnlineUrlResult = normalizeBookReadOnlineInput(readOnlineUrlRaw);
+      if (!readOnlineUrlResult.ok) {
+        showMessage(readOnlineUrlResult.msg, true);
+        return;
+      }
       if (await editBook(bookId, {
         title,
         author,
+        read_online_url: readOnlineUrlResult.value || null,
         available_copies: available,
         issue_total_copies: issueTotal,
         slot_booking_copies: slotCopies,
@@ -3477,6 +3898,7 @@ function initUserRegisterOtp() {
           currentDeveloper = null;
           currentAdmin = null;
           currentUser = result.user;
+          resetDashboardRenderState('user');
           document.getElementById('userRegForm').reset();
           document.getElementById('userOtpForm').reset();
           showMessage('Registration successful');
@@ -3549,6 +3971,7 @@ function initUserLogin() {
         currentDeveloper = baseResult.developer;
         currentAdmin = null;
         currentUser = null;
+        resetDashboardRenderState('developer');
         document.getElementById('userLoginPassword').value = '';
         showMessage('Login successful');
         showScreen('developer-dashboard');
@@ -3560,6 +3983,7 @@ function initUserLogin() {
         currentDeveloper = null;
         currentAdmin = baseResult.admin;
         currentUser = null;
+        resetDashboardRenderState('admin');
         document.getElementById('userLoginPassword').value = '';
         showMessage('Login successful');
         showScreen('admin-dashboard');
@@ -3570,6 +3994,7 @@ function initUserLogin() {
       currentDeveloper = null;
       currentAdmin = null;
       currentUser = baseResult.user;
+      resetDashboardRenderState('user');
       document.getElementById('userLoginPassword').value = '';
       showMessage('Login successful');
       showScreen('user-dashboard');
@@ -3644,9 +4069,13 @@ function initForgotPassword() {
   }
 }
 
-async function loadDeveloperDashboard() {
+async function loadDeveloperDashboard(options = {}) {
   if (!currentDeveloper) return;
   if (developerDashboardLoadPromise) return developerDashboardLoadPromise;
+  const shouldShowSkeleton = options.showSkeleton ?? !dashboardHydrationState.developer;
+  if (shouldShowSkeleton) {
+    showDashboardSkeleton('developer', options.skeletonKeys);
+  }
 
   developerDashboardLoadPromise = (async () => {
     await refreshDeveloperDashboardData();
@@ -3692,6 +4121,7 @@ async function loadDeveloperDashboard() {
 
   try {
     await developerDashboardLoadPromise;
+    dashboardHydrationState.developer = true;
   } finally {
     developerDashboardLoadPromise = null;
   }
@@ -3719,7 +4149,7 @@ function initDeveloperDashboard() {
   if (developerUserSearch) {
     developerUserSearch.addEventListener('input', () => {
       delete dashboardRenderState.developer.users;
-      void loadDeveloperDashboard();
+      void loadDeveloperDashboard({ showSkeleton: true, skeletonKeys: ['users'] });
     });
   }
 
@@ -3727,7 +4157,7 @@ function initDeveloperDashboard() {
   if (developerUserStatusFilter) {
     developerUserStatusFilter.addEventListener('change', () => {
       delete dashboardRenderState.developer.users;
-      void loadDeveloperDashboard();
+      void loadDeveloperDashboard({ showSkeleton: true, skeletonKeys: ['users'] });
     });
   }
 
@@ -3735,14 +4165,18 @@ function initDeveloperDashboard() {
   if (developerLogSearch) {
     developerLogSearch.addEventListener('input', () => {
       delete dashboardRenderState.developer.logs;
-      void loadDeveloperDashboard();
+      void loadDeveloperDashboard({ showSkeleton: true, skeletonKeys: ['logs'] });
     });
   }
 }
 
-async function loadUserDashboard() {
+async function loadUserDashboard(options = {}) {
   if (!currentUser) return;
   if (userDashboardLoadPromise) return userDashboardLoadPromise;
+  const shouldShowSkeleton = options.showSkeleton ?? !dashboardHydrationState.user;
+  if (shouldShowSkeleton) {
+    showDashboardSkeleton('user', options.skeletonKeys);
+  }
 
   userDashboardLoadPromise = (async () => {
     await refreshCatalogData();
@@ -3826,12 +4260,26 @@ async function loadUserDashboard() {
     const issuedEl = document.getElementById('userIssuedList');
     if (issuedEl) {
       renderDashboardSection('user', 'issued', `${currentUser.id}:${buildLoansSignature(issued)}`, () => {
+        setLoadingRegion(issuedEl, false);
         if (issued.length === 0) issuedEl.innerHTML = '<p class="empty">No books issued.</p>';
         else issuedEl.innerHTML = issued.map(i => {
           const book = searchBooksById(i.book_id);
+          const readOnlineAction = renderReadOnlineAction(book);
           const title = book ? book.title : 'Book #' + i.book_id;
           const lib = i.lib || (book ? book.lib : 'Unknown library');
-          return `<div class="issued-card"><strong>${escapeHtml(title)}</strong> (ID: ${i.book_id}) - ${escapeHtml(lib)} - Due: ${formatDate(i.due_date)} <button type="button" class="btn btn-sm" data-return="${i.book_id}">Return</button></div>`;
+          return `
+            <div class="issued-card module-card">
+              <div class="module-copy">
+                <strong>${escapeHtml(title)}</strong>
+                <div class="module-meta">Book ID: ${i.book_id} • ${escapeHtml(lib)}</div>
+                <div class="module-meta">Due: ${formatDate(i.due_date)}</div>
+              </div>
+              <div class="module-actions">
+                ${readOnlineAction}
+                <button type="button" class="btn btn-sm" data-return="${i.book_id}">Return</button>
+              </div>
+            </div>
+          `;
         }).join('');
         issuedEl.querySelectorAll('[data-return]').forEach(btn => {
           btn.addEventListener('click', () => {
@@ -3871,6 +4319,7 @@ async function loadUserDashboard() {
 
   try {
     await userDashboardLoadPromise;
+    dashboardHydrationState.user = true;
   } finally {
     userDashboardLoadPromise = null;
   }
@@ -3909,7 +4358,7 @@ function initUserDashboard() {
       userBookSearchState.searchType = by;
       userBookSearchState.libraryFilter = libraryFilter;
       delete dashboardRenderState.user.books;
-      void loadUserDashboard();
+      void loadUserDashboard({ showSkeleton: true, skeletonKeys: ['books'] });
     };
   }
 
@@ -3932,41 +4381,46 @@ function initUserDashboard() {
     libraryFilter.addEventListener('change', () => {
       syncUserBookSearchStateFromControls();
       delete dashboardRenderState.user.books;
-      void loadUserDashboard();
+      void loadUserDashboard({ showSkeleton: true, skeletonKeys: ['books'] });
     });
   }
 }
 
 // ----- Bootstrap -----
 async function init() {
-  setSaveStatus('Connecting to API...');
-  initHome();
-  initNav();
-  initContactPage();
-  initAdminDashboard();
-  initUserRegister();
-  initUserRegisterOtp();
-  initUserLogin();
-  initForgotPassword();
-  initDeveloperDashboard();
-  initSlotBookingModal();
-  initSlotCancelOtpModal();
-  initUserDashboard();
-  document.addEventListener('visibilitychange', () => {
-    updateDashboardPolling();
-    if (document.visibilityState === 'visible') {
-      void pollActiveDashboard();
+  initBrandLoader();
+  try {
+    setSaveStatus('Connecting to API...');
+    initHome();
+    initNav();
+    initContactPage();
+    initAdminDashboard();
+    initUserRegister();
+    initUserRegisterOtp();
+    initUserLogin();
+    initForgotPassword();
+    initDeveloperDashboard();
+    initSlotBookingModal();
+    initSlotCancelOtpModal();
+    initUserDashboard();
+    document.addEventListener('visibilitychange', () => {
+      updateDashboardPolling();
+      if (document.visibilityState === 'visible') {
+        void pollActiveDashboard();
+      }
+    });
+    showScreen('home');
+    const backendOk = await checkBackend();
+    if (backendOk) {
+      try {
+        await loadBackendDataFromServer();
+      } catch (error) {
+        console.error('Initial API load failed:', error);
+        showMessage(getErrorMessage(error, 'Initial API load failed.'), true);
+      }
     }
-  });
-  showScreen('home');
-  const backendOk = await checkBackend();
-  if (backendOk) {
-    try {
-      await loadBackendDataFromServer();
-    } catch (error) {
-      console.error('Initial API load failed:', error);
-      showMessage(getErrorMessage(error, 'Initial API load failed.'), true);
-    }
+  } finally {
+    await releaseBrandLoader();
   }
 }
 

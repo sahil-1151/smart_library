@@ -43,9 +43,12 @@ load_local_env_file()
 
 # ===== CONFIGURE WITH ENVIRONMENT VARIABLES =====
 SENDER_EMAIL = os.environ.get("SMART_LIBRARY_SENDER_EMAIL", "").strip()
-APP_PASSWORD = os.environ.get("SMART_LIBRARY_APP_PASSWORD", "").strip()
-SUPPORT_EMAIL = os.environ.get("SMART_LIBRARY_SUPPORT_EMAIL", SENDER_EMAIL).strip()
 SMTP_SERVER = os.environ.get("SMART_LIBRARY_SMTP_SERVER", "smtp.gmail.com").strip() or "smtp.gmail.com"
+APP_PASSWORD = os.environ.get("SMART_LIBRARY_APP_PASSWORD", "").strip()
+if SMTP_SERVER.lower().endswith("gmail.com"):
+    # Gmail app passwords are often copied in grouped blocks like "abcd efgh ijkl mnop".
+    APP_PASSWORD = "".join(APP_PASSWORD.split())
+SUPPORT_EMAIL = os.environ.get("SMART_LIBRARY_SUPPORT_EMAIL", SENDER_EMAIL).strip()
 SMTP_PORT = int(os.environ.get("SMART_LIBRARY_SMTP_PORT", "465"))
 CORS_ORIGIN = os.environ.get("SMART_LIBRARY_CORS_ORIGIN", "*").strip() or "*"
 OTP_TTL_SECONDS = int(os.environ.get("SMART_LIBRARY_OTP_TTL_SECONDS", "600"))
@@ -400,7 +403,13 @@ def run_server(port=8081):
     print(f"Email Server running on http://localhost:{port}")
     print(f"Using sender: {SENDER_EMAIL or 'not configured'}")
     print("Endpoints: POST /send_otp, POST /verify_otp, POST /send_issue_approval, POST /send_contact_message")
-    print("\nConfigure SMART_LIBRARY_SENDER_EMAIL and SMART_LIBRARY_APP_PASSWORD in your shell or a local .env file to enable email delivery.")
+    if not SENDER_EMAIL or not APP_PASSWORD:
+        print(
+            "\nConfigure SMART_LIBRARY_SENDER_EMAIL and SMART_LIBRARY_APP_PASSWORD "
+            "in your shell or a local .env file to enable email delivery."
+        )
+    else:
+        print("SMTP credentials loaded from environment or .env.")
     if ENABLE_DEMO_OTP_FALLBACK:
         print("Demo OTP fallback is enabled when SMTP delivery fails.")
     try:
