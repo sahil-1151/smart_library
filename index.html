@@ -225,6 +225,56 @@
                 </div>
             </div>
             <div class="card">
+                <div class="section-header">
+                    <h3>Library Analytics</h3>
+                    <span class="section-toggle-meta">Live demand and engagement snapshot</span>
+                </div>
+                <div class="stats-grid admin-analytics-grid">
+                    <div class="stat-chip">
+                        <span class="stat-label">Total books</span>
+                        <strong id="adminAnalyticsTotalBooks">0</strong>
+                    </div>
+                    <div class="stat-chip">
+                        <span class="stat-label">Available copies</span>
+                        <strong id="adminAnalyticsAvailableCopies">0</strong>
+                    </div>
+                    <div class="stat-chip">
+                        <span class="stat-label">Active loans</span>
+                        <strong id="adminAnalyticsActiveLoans">0</strong>
+                    </div>
+                    <div class="stat-chip">
+                        <span class="stat-label">Pending borrows</span>
+                        <strong id="adminAnalyticsPendingBorrows">0</strong>
+                    </div>
+                    <div class="stat-chip">
+                        <span class="stat-label">Pending purchases</span>
+                        <strong id="adminAnalyticsPendingPurchases">0</strong>
+                    </div>
+                    <div class="stat-chip">
+                        <span class="stat-label">Pending slots</span>
+                        <strong id="adminAnalyticsPendingSlots">0</strong>
+                    </div>
+                    <div class="stat-chip">
+                        <span class="stat-label">Waitlist pressure</span>
+                        <strong id="adminAnalyticsWaitlistEntries">0</strong>
+                    </div>
+                    <div class="stat-chip">
+                        <span class="stat-label">Average rating</span>
+                        <strong id="adminAnalyticsAverageRating">0.0</strong>
+                    </div>
+                </div>
+                <div class="analytics-panels">
+                    <div>
+                        <h4>Top demand books</h4>
+                        <div id="adminAnalyticsTopBooksList" class="module-list scroll-panel-list"></div>
+                    </div>
+                    <div>
+                        <h4>Recent reviews</h4>
+                        <div id="adminAnalyticsRecentReviewsList" class="module-list scroll-panel-list"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
                 <h3>Add book</h3>
                 <form id="adminAddBookForm" class="form inline-form">
                     <label>Book ID <input type="number" id="addBookId" min="1" required></label>
@@ -610,6 +660,18 @@
                         <span class="shortcut-icon" aria-hidden="true">AS</span>
                         <span class="shortcut-label">Approved Slots</span>
                     </button>
+                    <button type="button" class="shortcut-tile" data-user-screen-open="user-wishlist-screen">
+                        <span class="shortcut-icon" aria-hidden="true">WL</span>
+                        <span class="shortcut-label">Wishlist</span>
+                    </button>
+                    <button type="button" class="shortcut-tile" data-user-screen-open="user-waitlist-screen">
+                        <span class="shortcut-icon" aria-hidden="true">QT</span>
+                        <span class="shortcut-label">Waitlist</span>
+                    </button>
+                    <button type="button" class="shortcut-tile" data-user-screen-open="user-notifications-screen">
+                        <span class="shortcut-icon" aria-hidden="true">NT</span>
+                        <span class="shortcut-label">Notifications <span id="userNotificationsUnread" class="shortcut-badge">0</span></span>
+                    </button>
                 </div>
             </div>
             <div class="card dashboard-scroll-card">
@@ -689,6 +751,42 @@
                 <div id="userApprovedSlotBookingsList" class="module-list scroll-panel-list"></div>
             </div>
         </section>
+
+        <section id="user-wishlist-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-user-screen-back="user-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Your Wishlist</h2>
+            <div class="card dashboard-scroll-card">
+                <p>Saved books stay here so you can come back to them quickly.</p>
+                <div id="userWishlistList" class="books-grid scroll-panel-grid"></div>
+            </div>
+        </section>
+
+        <section id="user-waitlist-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-user-screen-back="user-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Your Waitlist</h2>
+            <div class="card dashboard-scroll-card">
+                <p>When a copy becomes available, you will see it here and in your notifications.</p>
+                <div id="userWaitlistList" class="module-list scroll-panel-list"></div>
+            </div>
+        </section>
+
+        <section id="user-notifications-screen" class="screen">
+            <div class="dashboard-return-bar">
+                <button type="button" class="btn btn-ghost" data-user-screen-back="user-dashboard">Back to dashboard</button>
+            </div>
+            <h2>Your Notifications</h2>
+            <div class="card dashboard-scroll-card">
+                <div class="section-header">
+                    <h3>Notification Centre</h3>
+                    <button type="button" id="userNotificationsMarkAll" class="btn btn-sm">Mark all as read</button>
+                </div>
+                <div id="userNotificationsList" class="module-list scroll-panel-list"></div>
+            </div>
+        </section>
     </main>
 
     <!-- Edit book modal (mirrors Bst.h edit) -->
@@ -748,6 +846,49 @@
                     <button type="button" id="slotCancelOtpClose" class="btn btn-ghost">Close</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div id="reviewModal" class="modal" aria-hidden="true">
+        <div class="modal-backdrop" data-close="reviewModal"></div>
+        <div class="modal-content card">
+            <h3>Book Reviews</h3>
+            <p id="reviewModalBookTitle" class="modal-copy"></p>
+            <p id="reviewModalSummary" class="hint"></p>
+            <p id="reviewModalEligibility" class="hint review-eligibility"></p>
+            <div id="reviewModalReviewsList" class="review-list"></div>
+            <form id="reviewModalForm" class="form">
+                <label>
+                    Rating
+                    <select id="reviewModalRating" class="rating-select" required>
+                        <option value="5">5 - Excellent</option>
+                        <option value="4">4 - Good</option>
+                        <option value="3">3 - Okay</option>
+                        <option value="2">2 - Weak</option>
+                        <option value="1">1 - Poor</option>
+                    </select>
+                </label>
+                <label>Your review <textarea id="reviewModalText" rows="4" maxlength="500" placeholder="Share what you liked, disliked, or who this book is good for."></textarea></label>
+                <div class="modal-actions">
+                    <button type="submit" id="reviewModalSubmit" class="btn btn-primary">Save Review</button>
+                    <button type="button" id="reviewModalDelete" class="btn danger" style="display: none;">Delete Review</button>
+                    <button type="button" id="reviewModalClose" class="btn btn-ghost">Close</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="bookActionModal" class="modal" aria-hidden="true">
+        <div class="modal-backdrop" data-close="bookActionModal"></div>
+        <div class="modal-content card book-action-modal">
+            <h3 id="bookActionModalTitle">Book Action</h3>
+            <p id="bookActionModalBookLabel" class="modal-copy"></p>
+            <p id="bookActionModalHint" class="hint"></p>
+            <div id="bookActionModalFacts" class="book-action-facts"></div>
+            <div class="modal-actions">
+                <button type="button" id="bookActionModalConfirm" class="btn btn-primary">Continue</button>
+                <button type="button" id="bookActionModalClose" class="btn btn-ghost">Close</button>
+            </div>
         </div>
     </div>
 

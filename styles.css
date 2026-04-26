@@ -21,6 +21,89 @@
   --font-display: "Space Grotesk", "Sora", "Fira Sans", sans-serif;
 }
 
+.shortcut-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.15);
+  color: #0f766e;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.book-statline {
+  margin: 0.2rem 0;
+  color: #51616d;
+  font-size: 0.92rem;
+}
+
+.book-waitlist-summary,
+.book-slot-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.analytics-panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.notification-card.notification-unread {
+  border-color: rgba(13, 148, 136, 0.32);
+  box-shadow: 0 12px 24px rgba(13, 148, 136, 0.08);
+}
+
+.review-list {
+  max-height: min(18rem, 38vh);
+  overflow: auto;
+  display: grid;
+  gap: 0.85rem;
+  margin: 0.8rem 0 1rem;
+}
+
+.review-entry {
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(122, 143, 158, 0.22);
+  border-radius: 1rem;
+  background: rgba(248, 250, 252, 0.82);
+}
+
+.review-entry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.3rem;
+}
+
+.review-stars {
+  color: #c2410c;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.rating-select {
+  min-width: 14rem;
+}
+
+.btn.is-active {
+  background: #0f766e;
+  color: #fff;
+  border-color: #0f766e;
+}
+
+@media (max-width: 900px) {
+  .analytics-panels {
+    grid-template-columns: 1fr;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -991,6 +1074,10 @@ html.brand-loader-pending .brand-boot {
   gap: 0.2rem;
 }
 
+.book-meta.compact {
+  gap: 0.45rem;
+}
+
 .book-card .book-id {
   font-size: 0.75rem;
   color: var(--muted);
@@ -1012,6 +1099,43 @@ html.brand-loader-pending .brand-boot {
   color: var(--muted);
 }
 
+.book-card .lib {
+  line-height: 1.35;
+}
+
+.book-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.15rem;
+}
+
+.book-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.book-badge.available {
+  background: rgba(22, 163, 74, 0.12);
+  color: var(--success);
+}
+
+.book-badge.unavailable {
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--error);
+}
+
+.book-badge.neutral {
+  background: rgba(14, 165, 168, 0.12);
+  color: var(--accent);
+}
+
 .book-card .copies {
   margin: 0.35rem 0 0;
   font-size: 0.8rem;
@@ -1029,6 +1153,17 @@ html.brand-loader-pending .brand-boot {
   flex-wrap: wrap;
   gap: 0.4rem;
   margin-top: 0.35rem;
+}
+
+.book-actions.compact {
+  margin-top: 0.15rem;
+}
+
+.book-actions.compact .btn,
+.book-actions.compact a.btn {
+  flex: 1 1 calc(50% - 0.25rem);
+  justify-content: center;
+  text-align: center;
 }
 
 .is-skeleton-loading {
@@ -1379,6 +1514,46 @@ html.brand-loader-pending .brand-boot {
 .modal-copy {
   margin-top: 0;
   color: var(--muted);
+}
+
+.review-eligibility {
+  margin: -0.15rem 0 0.3rem;
+}
+
+#reviewModalForm.is-disabled {
+  opacity: 0.72;
+}
+
+.book-action-modal {
+  width: min(100%, 26rem);
+}
+
+.book-action-facts {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.5rem;
+}
+
+.book-action-fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 14px;
+  background: rgba(11, 19, 32, 0.04);
+  border: 1px solid rgba(116, 131, 148, 0.16);
+}
+
+.book-action-fact-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.book-action-fact-value {
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: right;
+  color: var(--text);
 }
 
 /* Edit book modal */

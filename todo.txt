@@ -1,5 +1,40 @@
-//ask user if he want to search in a specific library if yes then go ,if he want to search in all then also .
-//creation of library ll to display all the library which is present in the system.
-//time slot creation for every book , when ever the book is free.
+Smart Library feature rollout TODO
 
-//frontend work
+[ ] Notifications centre
+[ ] Add notification storage in PostgreSQL
+[ ] Create notification APIs for list, mark-as-read, and mark-all-read
+[ ] Generate notifications for borrow/purchase/slot review events
+[ ] Generate notifications for waitlist joins and availability alerts
+[ ] Add notification centre screen in the user dashboard
+[ ] Show unread notification count in the UI
+
+[ ] Admin analytics dashboard
+[ ] Add analytics queries to the admin dashboard snapshot
+[ ] Show core metrics: active loans, pending requests, waitlist pressure, avg rating
+[ ] Show top demanded books and recent reviews
+[ ] Add analytics cards and summary panels to the admin dashboard
+
+[ ] Book reviews and ratings
+[ ] Add review + rating storage in PostgreSQL
+[ ] Create APIs to list reviews for a book and create/update/delete a review
+[ ] Show average rating and review count on book cards
+[ ] Add review modal with rating form and recent reviews list
+
+[ ] Wishlist and favorites
+[ ] Add favorites storage in PostgreSQL
+[ ] Create APIs to add/remove favorites and list a user's wishlist
+[ ] Add favorite toggle on book cards
+[ ] Add wishlist screen in the user dashboard
+
+[ ] Waitlist UI
+[ ] Extend dashboard snapshot with waitlist entries
+[ ] Show waitlist count on book cards
+[ ] Add join waitlist action for unavailable books
+[ ] Add waitlist management screen for users
+[ ] Add cancel waitlist action
+
+[ ] Final integration and checks
+[ ] Refresh dashboard caching after new write actions
+[ ] Verify Python syntax
+[ ] Verify JavaScript syntax
+[ ] Manual smoke test of user/admin flows

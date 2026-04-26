@@ -20,6 +20,8 @@ const runtimeConfig = window.SMART_LIBRARY_CONFIG || {};
 const AUDIT_SESSION_STORAGE_KEY = 'sl_audit_session_id';
 const BRAND_LOADER_STORAGE_KEY = 'sl_brand_loader_seen_v1';
 const BRAND_LOADER_MIN_DURATION_MS = 1450;
+const RUNTIME_HOST = String(window.location.hostname || '').trim().toLowerCase();
+const IS_LOCAL_RUNTIME_HOST = RUNTIME_HOST === 'localhost' || RUNTIME_HOST === '127.0.0.1';
 
 function normalizeBaseUrl(value) {
   const raw = String(value || '').trim();
@@ -95,11 +97,18 @@ const apiState = {
   purchaseRequests: [],
   issueHistory: [],
   slotBookings: [],
+  favorites: [],
+  waitlistEntries: [],
+  notifications: [],
   queue: [],
   visitSlots: [],
   developerUsers: [],
   developerLogs: [],
   developerMetrics: {},
+  userMetrics: {},
+  adminMetrics: {},
+  adminTopBooks: [],
+  adminRecentReviews: [],
 };
 
 function generateAuditSessionId() {
@@ -186,6 +195,7 @@ async function apiFetch(path, options = {}) {
   const requestOptions = {
     method,
     headers,
+    credentials: 'same-origin',
   };
   if (options.body != null && !['GET', 'HEAD'].includes(method)) {
     requestOptions.body = options.body;
@@ -221,16 +231,118 @@ async function apiFetch(path, options = {}) {
   return payload;
 }
 
+function toPositiveIntegerOrNull(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 function toUserModel(user) {
+  const source = user || {};
   return {
-    id: user.user_id,
-    name: user.full_name,
-    email: user.email,
-    role: user.role,
-    lib: user.managed_library_name || '',
-    managed_library_id: user.managed_library_id || null,
-    managed_library_code: user.managed_library_code || '',
+    id: toPositiveIntegerOrNull(source.user_id ?? source.id),
+    name: String(source.full_name || source.name || '').trim(),
+    email: String(source.email || '').trim(),
+    role: String(source.role || '').trim().toLowerCase() || 'member',
+    lib: String(source.managed_library_name || source.lib || '').trim(),
+    managed_library_id: toPositiveIntegerOrNull(source.managed_library_id),
+    managed_library_code: String(source.managed_library_code || source.library_code || '').trim(),
   };
+}
+
+function getCurrentAdminReviewerId() {
+  return toPositiveIntegerOrNull(currentAdmin && currentAdmin.id);
+}
+
+function clearAuthenticatedIdentity() {
+  currentDeveloper = null;
+  currentAdmin = null;
+  currentUser = null;
+}
+
+function getAuthenticatedScope() {
+  if (currentDeveloper) return 'developer';
+  if (currentAdmin) return 'admin';
+  if (currentUser) return 'user';
+  return '';
+}
+
+function getDashboardScreenId(scope) {
+  if (scope === 'developer') return 'developer-dashboard';
+  if (scope === 'admin') return 'admin-dashboard';
+  return 'user-dashboard';
+}
+
+async function loadAuthenticatedDashboard(scope) {
+  if (scope === 'developer') {
+    await loadDeveloperDashboard();
+    return;
+  }
+  if (scope === 'admin') {
+    await loadAdminDashboard();
+    return;
+  }
+  await loadUserDashboard();
+}
+
+async function syncScreenFromHistoryState(state) {
+  const requestedScreenId = String((state && state[SCREEN_HISTORY_STATE_KEY]) || '').trim() || getDefaultScreenId();
+  const nextScreenId = normalizeScreenIdForAccess(requestedScreenId);
+  showScreen(nextScreenId, { historyMode: 'skip' });
+
+  if (currentDeveloper && DEVELOPER_SCREEN_IDS.has(nextScreenId)) {
+    await loadDeveloperDashboard({ showSkeleton: false });
+    return;
+  }
+  if (currentAdmin && ADMIN_SCREEN_IDS.has(nextScreenId)) {
+    await loadAdminDashboard({ showSkeleton: false });
+    return;
+  }
+  if (currentUser && USER_SCREEN_IDS.has(nextScreenId)) {
+    await loadUserDashboard({ showSkeleton: false });
+  }
+}
+
+async function applyAuthenticatedIdentity(rawUser, options = {}) {
+  const user = toUserModel(rawUser);
+  rememberKnownUser(user);
+  clearAuthenticatedIdentity();
+
+  if (user.role === 'developer') currentDeveloper = user;
+  else if (user.role === 'admin') currentAdmin = user;
+  else currentUser = user;
+
+  const scope = getAuthenticatedScope();
+  if (scope) {
+    resetDashboardRenderState(scope);
+  }
+  updateNav();
+
+  if (options.openDashboard !== false && scope) {
+    const targetScreenId = options.screenId || getDashboardScreenId(scope);
+    showScreen(targetScreenId, { historyMode: options.historyMode || 'push' });
+    await loadAuthenticatedDashboard(scope);
+  }
+
+  return { scope, user };
+}
+
+async function restoreAuthSession() {
+  try {
+    const user = await apiFetch('/api/auth/session');
+    await applyAuthenticatedIdentity(user, {
+      openDashboard: true,
+      historyMode: 'replace',
+      screenId: getCurrentHistoryScreenId() || undefined,
+    });
+    return true;
+  } catch (error) {
+    if (error && (error.status === 401 || error.status === 403)) {
+      clearAuthenticatedIdentity();
+      updateNav();
+      return false;
+    }
+    throw error;
+  }
 }
 
 function toBookModel(book) {
@@ -248,6 +360,10 @@ function toBookModel(book) {
     issue_total_copies: Number(book.issue_total_copies ?? book.total_copies) || 0,
     available_copies: Number(book.available_copies) || 0,
     slot_booking_copies: Number(book.slot_booking_copies ?? book.total_copies) || 0,
+    average_rating: Number(book.average_rating) || 0,
+    review_count: Number(book.review_count) || 0,
+    waitlist_count: Number(book.waitlist_count) || 0,
+    favorite_count: Number(book.favorite_count) || 0,
   };
 }
 
@@ -307,6 +423,66 @@ function toSlotBookingModel(booking) {
     user_name: booking.member_name || '',
     user_email: booking.member_email || '',
     lib: booking.library_name || '',
+  };
+}
+
+function toFavoriteModel(favorite) {
+  return {
+    favorite_id: favorite.favorite_id,
+    student_id: favorite.member_id,
+    book_id: favorite.book_id,
+    created_at: favorite.created_at || '',
+    lib: favorite.library_name || '',
+  };
+}
+
+function toWaitlistEntryModel(entry) {
+  return {
+    waitlist_entry_id: entry.waitlist_entry_id,
+    student_id: entry.member_id,
+    book_id: entry.book_id,
+    status: entry.status || 'waiting',
+    position: Number(entry.position) || 0,
+    notified_at: entry.notified_at || '',
+    fulfilled_at: entry.fulfilled_at || '',
+    cancelled_at: entry.cancelled_at || '',
+    created_at: entry.created_at || '',
+    updated_at: entry.updated_at || '',
+    lib: entry.library_name || '',
+  };
+}
+
+function toNotificationModel(notification) {
+  return {
+    notification_id: notification.notification_id,
+    user_id: notification.user_id,
+    category: notification.category || 'general',
+    title: notification.title || '',
+    message: notification.message || '',
+    link_path: notification.link_path || '',
+    book_id: notification.book_id || null,
+    is_read: !!notification.is_read,
+    read_at: notification.read_at || '',
+    created_at: notification.created_at || '',
+    updated_at: notification.updated_at || '',
+    book_title: notification.book_title || '',
+    lib: notification.library_name || '',
+  };
+}
+
+function toBookReviewModel(review) {
+  return {
+    review_id: review.review_id,
+    student_id: review.member_id,
+    book_id: review.book_id,
+    rating: Number(review.rating) || 0,
+    review_text: review.review_text || '',
+    created_at: review.created_at || '',
+    updated_at: review.updated_at || '',
+    user_name: review.member_name || '',
+    user_email: review.member_email || '',
+    book_title: review.book_title || '',
+    book_author: review.book_author || '',
   };
 }
 
@@ -401,17 +577,27 @@ async function refreshUserDashboardData(userId) {
   const purchaseRequests = Array.isArray(snapshot.purchase_requests) ? snapshot.purchase_requests : [];
   const loans = Array.isArray(snapshot.loans) ? snapshot.loans : [];
   const slotBookings = Array.isArray(snapshot.slot_bookings) ? snapshot.slot_bookings : [];
+  const favorites = Array.isArray(snapshot.favorites) ? snapshot.favorites : [];
+  const waitlistEntries = Array.isArray(snapshot.waitlist_entries) ? snapshot.waitlist_entries : [];
+  const notifications = Array.isArray(snapshot.notifications) ? snapshot.notifications : [];
 
   const mappedRequests = borrowRequests.map(toBorrowRequestModel);
   const mappedPurchaseRequests = purchaseRequests.map(toPurchaseRequestModel);
   const mappedLoans = loans.map(toLoanModel);
   const mappedSlotBookings = slotBookings.map(toSlotBookingModel);
+  const mappedFavorites = favorites.map(toFavoriteModel);
+  const mappedWaitlistEntries = waitlistEntries.map(toWaitlistEntryModel);
+  const mappedNotifications = notifications.map(toNotificationModel);
 
   saveIssueRequests(mappedRequests.filter(request => String(request.status).toLowerCase() === 'pending'));
   saveIssueHistory(mappedRequests);
   savePurchaseRequests(mappedPurchaseRequests);
   saveIssued(mappedLoans);
   saveSlotBookings(mappedSlotBookings);
+  saveFavorites(mappedFavorites);
+  saveWaitlistEntries(mappedWaitlistEntries);
+  saveNotifications(mappedNotifications);
+  apiState.userMetrics = snapshot.metrics || {};
 }
 
 async function refreshAdminDashboardData(admin) {
@@ -420,6 +606,9 @@ async function refreshAdminDashboardData(admin) {
     saveIssueHistory([]);
     saveIssued([]);
     saveSlotBookings([]);
+    apiState.adminMetrics = {};
+    saveAdminTopBooks([]);
+    saveAdminRecentReviews([]);
     return;
   }
 
@@ -429,22 +618,29 @@ async function refreshAdminDashboardData(admin) {
   const purchaseRequests = Array.isArray(snapshot.purchase_requests) ? snapshot.purchase_requests : [];
   const loans = Array.isArray(snapshot.loans) ? snapshot.loans : [];
   const slotBookings = Array.isArray(snapshot.slot_bookings) ? snapshot.slot_bookings : [];
+  const topBooks = Array.isArray(snapshot.top_books) ? snapshot.top_books : [];
+  const recentReviews = Array.isArray(snapshot.recent_reviews) ? snapshot.recent_reviews : [];
 
   const mappedRequests = borrowRequests.map(toBorrowRequestModel);
   const mappedPurchaseRequests = purchaseRequests.map(toPurchaseRequestModel);
   const mappedLoans = loans.map(toLoanModel);
   const mappedSlotBookings = slotBookings.map(toSlotBookingModel);
+  const mappedRecentReviews = recentReviews.map(toBookReviewModel);
 
   mappedRequests.forEach(request => rememberMember(request.student_id, request.user_name, request.user_email));
   mappedPurchaseRequests.forEach(request => rememberMember(request.student_id, request.user_name, request.user_email));
   mappedLoans.forEach(loan => rememberMember(loan.student_id, loan.user_name, loan.user_email));
   mappedSlotBookings.forEach(booking => rememberMember(booking.student_id, booking.user_name, booking.user_email));
+  mappedRecentReviews.forEach(review => rememberMember(review.student_id, review.user_name, review.user_email));
 
   saveIssueRequests(mappedRequests);
   savePurchaseRequests(mappedPurchaseRequests);
   saveIssueHistory([]);
   saveIssued(mappedLoans);
   saveSlotBookings(mappedSlotBookings);
+  apiState.adminMetrics = snapshot.analytics || {};
+  saveAdminTopBooks(topBooks);
+  saveAdminRecentReviews(mappedRecentReviews);
 }
 
 async function refreshDeveloperDashboardData() {
@@ -460,10 +656,14 @@ function generateOtp() {
 }
 
 const SAME_ORIGIN_BASE = window.location.protocol === 'file:' ? '' : normalizeBaseUrl(window.location.origin);
-const DEFAULT_APP_SERVER_URL = SAME_ORIGIN_BASE || 'http://localhost:8080';
+const DEFAULT_APP_SERVER_URL = IS_LOCAL_RUNTIME_HOST
+  ? (SAME_ORIGIN_BASE || 'http://127.0.0.1:5050')
+  : (SAME_ORIGIN_BASE || 'http://localhost:5050');
 const DEFAULT_EMAIL_SERVER_URL = window.location.protocol === 'file:'
   ? 'http://localhost:8081'
-  : `${window.location.protocol}//${window.location.hostname || 'localhost'}:8081`;
+  : (IS_LOCAL_RUNTIME_HOST
+      ? (SAME_ORIGIN_BASE || 'http://127.0.0.1:8081')
+      : `${window.location.protocol}//${window.location.hostname || 'localhost'}:8081`);
 const APP_SERVER_URL = normalizeBaseUrl(
   runtimeConfig.apiBaseUrl || window.SMART_LIBRARY_API_URL || DEFAULT_APP_SERVER_URL
 );
@@ -522,25 +722,6 @@ function verifyOtpWithBackend(email, otp) {
     .catch(err => {
       console.error('OTP verify failed:', err);
       return { ok: false, msg: 'Verification failed. Start email_server.py or use the fallback OTP if shown.' };
-    });
-}
-
-function sendIssueApprovalEmail(payload) {
-  return fetch(EMAIL_SERVER_URL + '/send_issue_approval', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-    .then(async r => {
-      const data = await r.json().catch(() => ({}));
-      if (r.ok && data && data.ok) {
-        return { ok: true, msg: data.message || 'Approval email sent.' };
-      }
-      return { ok: false, msg: (data && data.error) || 'Approval email could not be sent.' };
-    })
-    .catch(err => {
-      console.error('Issue approval email failed:', err);
-      return { ok: false, msg: 'Approval email could not be sent. Start email_server.py to enable it.' };
     });
 }
 
@@ -883,6 +1064,46 @@ function getSlotBookings() {
 
 function saveSlotBookings(slotBookings) {
   return setStateCollection('slotBookings', slotBookings);
+}
+
+function getFavorites() {
+  return apiState.favorites;
+}
+
+function saveFavorites(favorites) {
+  return setStateCollection('favorites', favorites);
+}
+
+function getWaitlistEntries() {
+  return apiState.waitlistEntries;
+}
+
+function saveWaitlistEntries(entries) {
+  return setStateCollection('waitlistEntries', entries);
+}
+
+function getNotifications() {
+  return apiState.notifications;
+}
+
+function saveNotifications(items) {
+  return setStateCollection('notifications', items);
+}
+
+function getAdminTopBooks() {
+  return apiState.adminTopBooks;
+}
+
+function saveAdminTopBooks(items) {
+  return setStateCollection('adminTopBooks', items);
+}
+
+function getAdminRecentReviews() {
+  return apiState.adminRecentReviews;
+}
+
+function saveAdminRecentReviews(items) {
+  return setStateCollection('adminRecentReviews', items);
 }
 
 function getDeveloperUsers() {
@@ -1380,7 +1601,11 @@ async function cancelPurchaseRequest(request) {
 }
 
 async function approvePurchaseRequest(request) {
-  if (!request || !request.purchase_request_id || !currentAdmin) {
+  const reviewerUserId = getCurrentAdminReviewerId();
+  if (!reviewerUserId) {
+    return { ok: false, msg: 'Admin session is missing your user ID. Refresh once and sign in again.' };
+  }
+  if (!request || !request.purchase_request_id) {
     return { ok: false, msg: 'No matching pending purchase request found.' };
   }
 
@@ -1388,7 +1613,7 @@ async function approvePurchaseRequest(request) {
     await apiFetch(`/api/purchase-requests/${request.purchase_request_id}/review`, {
       method: 'POST',
       body: JSON.stringify({
-        reviewer_user_id: currentAdmin.id,
+        reviewer_user_id: reviewerUserId,
         action: 'approved',
       })
     });
@@ -1399,7 +1624,11 @@ async function approvePurchaseRequest(request) {
 }
 
 async function rejectPurchaseRequest(request) {
-  if (!request || !request.purchase_request_id || !currentAdmin) {
+  const reviewerUserId = getCurrentAdminReviewerId();
+  if (!reviewerUserId) {
+    return { ok: false, msg: 'Admin session is missing your user ID. Refresh once and sign in again.' };
+  }
+  if (!request || !request.purchase_request_id) {
     return { ok: false, msg: 'No matching pending purchase request found.' };
   }
 
@@ -1407,7 +1636,7 @@ async function rejectPurchaseRequest(request) {
     await apiFetch(`/api/purchase-requests/${request.purchase_request_id}/review`, {
       method: 'POST',
       body: JSON.stringify({
-        reviewer_user_id: currentAdmin.id,
+        reviewer_user_id: reviewerUserId,
         action: 'rejected',
         rejection_reason: 'Rejected by library admin.',
       })
@@ -1419,7 +1648,11 @@ async function rejectPurchaseRequest(request) {
 }
 
 async function approveIssueRequest(request) {
-  if (!request || !request.borrow_request_id || !currentAdmin) {
+  const reviewerUserId = getCurrentAdminReviewerId();
+  if (!reviewerUserId) {
+    return { ok: false, msg: 'Admin session is missing your user ID. Refresh once and sign in again.' };
+  }
+  if (!request || !request.borrow_request_id) {
     return { ok: false, msg: 'No matching pending request found.' };
   }
 
@@ -1427,25 +1660,16 @@ async function approveIssueRequest(request) {
     const result = await apiFetch(`/api/borrow-requests/${request.borrow_request_id}/review`, {
       method: 'POST',
       body: JSON.stringify({
-        reviewer_user_id: currentAdmin.id,
+        reviewer_user_id: reviewerUserId,
         action: 'approved',
       })
     });
     markCatalogDirty();
-    const book = searchBooksById(request.book_id);
-    const loan = result && result.loan ? toLoanModel(result.loan) : null;
     return {
       ok: true,
       msg: 'Request approved and book issued successfully',
-      approvalEmailData: {
-        email: request.user_email || '',
-        user_name: request.user_name || `Student #${request.student_id}`,
-        book_title: book ? book.title : `Book #${request.book_id}`,
-        library: book ? book.lib : (request.lib || ''),
-        book_id: String(request.book_id),
-        issue_date: loan ? formatDate(loan.issue_date) : formatDate(today()),
-        due_date: loan ? formatDate(loan.due_date) : formatDate(addDays(today(), 14)),
-      }
+      approvalEmailSent: !!(result && result.approval_email_sent),
+      approvalEmailError: String(result && result.approval_email_error ? result.approval_email_error : '').trim(),
     };
   } catch (error) {
     return { ok: false, msg: getErrorMessage(error, 'Approval failed.') };
@@ -1453,7 +1677,11 @@ async function approveIssueRequest(request) {
 }
 
 async function rejectIssueRequest(request) {
-  if (!request || !request.borrow_request_id || !currentAdmin) {
+  const reviewerUserId = getCurrentAdminReviewerId();
+  if (!reviewerUserId) {
+    return { ok: false, msg: 'Admin session is missing your user ID. Refresh once and sign in again.' };
+  }
+  if (!request || !request.borrow_request_id) {
     return { ok: false, msg: 'No matching pending request found.' };
   }
 
@@ -1461,7 +1689,7 @@ async function rejectIssueRequest(request) {
     await apiFetch(`/api/borrow-requests/${request.borrow_request_id}/review`, {
       method: 'POST',
       body: JSON.stringify({
-        reviewer_user_id: currentAdmin.id,
+        reviewer_user_id: reviewerUserId,
         action: 'rejected',
         rejection_reason: 'Rejected by library admin.',
       })
@@ -1547,6 +1775,172 @@ function getPurchaseRequestsForAdmin(adminLib) {
     .sort(issueRequestSortDescending);
 }
 
+function formatDateTime(value) {
+  if (!value) return 'Unknown time';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleString();
+}
+
+function getFavoritesForUser(studentId) {
+  return getFavorites().filter(favorite => Number(favorite.student_id) === Number(studentId));
+}
+
+function findFavoriteByBookId(studentId, bookId) {
+  return getFavorites().find(favorite =>
+    Number(favorite.student_id) === Number(studentId) &&
+    Number(favorite.book_id) === Number(bookId)
+  ) || null;
+}
+
+function isActiveWaitlistStatus(status) {
+  const normalized = String(status || '').toLowerCase();
+  return normalized === 'waiting' || normalized === 'notified';
+}
+
+function getWaitlistEntriesForUser(studentId) {
+  return getWaitlistEntries().filter(entry => Number(entry.student_id) === Number(studentId));
+}
+
+function getActiveWaitlistEntryForBook(studentId, bookId) {
+  return getWaitlistEntries().find(entry =>
+    Number(entry.student_id) === Number(studentId) &&
+    Number(entry.book_id) === Number(bookId) &&
+    isActiveWaitlistStatus(entry.status)
+  ) || null;
+}
+
+function getNotificationsForUser(userId) {
+  return getNotifications().filter(item => Number(item.user_id) === Number(userId));
+}
+
+function getUnreadNotificationsCount(userId) {
+  return getNotificationsForUser(userId).filter(item => !item.is_read).length;
+}
+
+async function addBookToFavorites(studentId, bookId) {
+  try {
+    await apiFetch('/api/favorites', {
+      method: 'POST',
+      body: JSON.stringify({
+        member_id: studentId,
+        book_id: bookId,
+      })
+    });
+    return { ok: true, msg: 'Book saved to wishlist.' };
+  } catch (error) {
+    return { ok: false, msg: getErrorMessage(error, 'Could not save this book to wishlist.') };
+  }
+}
+
+async function removeFavoriteBook(studentId, favoriteId) {
+  try {
+    await apiFetch(`/api/favorites/${favoriteId}/remove`, {
+      method: 'POST',
+      body: JSON.stringify({
+        member_id: studentId,
+      })
+    });
+    return { ok: true, msg: 'Book removed from wishlist.' };
+  } catch (error) {
+    return { ok: false, msg: getErrorMessage(error, 'Could not remove this book from wishlist.') };
+  }
+}
+
+async function joinWaitlist(studentId, bookId) {
+  try {
+    await apiFetch('/api/waitlist', {
+      method: 'POST',
+      body: JSON.stringify({
+        member_id: studentId,
+        book_id: bookId,
+      })
+    });
+    return { ok: true, msg: 'Added to the waitlist.' };
+  } catch (error) {
+    return { ok: false, msg: getErrorMessage(error, 'Could not join the waitlist.') };
+  }
+}
+
+async function cancelWaitlistEntry(entry) {
+  if (!entry || !entry.waitlist_entry_id) {
+    return { ok: false, msg: 'Waitlist entry not found.' };
+  }
+  try {
+    await apiFetch(`/api/waitlist/${entry.waitlist_entry_id}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({
+        member_id: entry.student_id,
+      })
+    });
+    return { ok: true, msg: 'Waitlist entry cancelled.' };
+  } catch (error) {
+    return { ok: false, msg: getErrorMessage(error, 'Could not cancel the waitlist entry.') };
+  }
+}
+
+async function fetchBookReviews(bookId, memberId = null) {
+  const query = new URLSearchParams({ limit: '25' });
+  if (memberId) query.set('member_id', String(memberId));
+  return apiFetch(`/api/books/${bookId}/reviews?${query.toString()}`);
+}
+
+async function saveBookReview(studentId, bookId, rating, reviewText) {
+  try {
+    await apiFetch(`/api/books/${bookId}/reviews`, {
+      method: 'POST',
+      body: JSON.stringify({
+        member_id: studentId,
+        rating,
+        review_text: reviewText,
+      })
+    });
+    return { ok: true, msg: 'Review saved.' };
+  } catch (error) {
+    return { ok: false, msg: getErrorMessage(error, 'Could not save the review.') };
+  }
+}
+
+async function removeBookReview(studentId, reviewId) {
+  try {
+    await apiFetch(`/api/reviews/${reviewId}/delete`, {
+      method: 'POST',
+      body: JSON.stringify({
+        member_id: studentId,
+      })
+    });
+    return { ok: true, msg: 'Review deleted.' };
+  } catch (error) {
+    return { ok: false, msg: getErrorMessage(error, 'Could not delete the review.') };
+  }
+}
+
+async function markNotificationAsRead(userId, notificationId) {
+  try {
+    await apiFetch(`/api/notifications/${notificationId}/read`, {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: userId,
+      })
+    });
+    return { ok: true, msg: 'Notification marked as read.' };
+  } catch (error) {
+    return { ok: false, msg: getErrorMessage(error, 'Could not update the notification.') };
+  }
+}
+
+async function markAllNotificationsAsRead(userId) {
+  try {
+    await apiFetch(`/api/users/${userId}/notifications/read-all`, {
+      method: 'POST',
+      body: JSON.stringify({})
+    });
+    return { ok: true, msg: 'All notifications marked as read.' };
+  } catch (error) {
+    return { ok: false, msg: getErrorMessage(error, 'Could not update notifications.') };
+  }
+}
+
 function isSlotBookingOpenStatus(status) {
   const normalized = String(status || '').toLowerCase();
   return normalized === 'pending' || normalized === 'approved';
@@ -1598,7 +1992,11 @@ async function createSlotBooking(studentId, bookId, slotDate, slotId) {
 }
 
 async function approveSlotBookingRequest(booking) {
-  if (!booking || !booking.slot_booking_id || !currentAdmin) {
+  const reviewerUserId = getCurrentAdminReviewerId();
+  if (!reviewerUserId) {
+    return { ok: false, msg: 'Admin session is missing your user ID. Refresh once and sign in again.' };
+  }
+  if (!booking || !booking.slot_booking_id) {
     return { ok: false, msg: 'No matching pending slot booking found.' };
   }
 
@@ -1606,7 +2004,7 @@ async function approveSlotBookingRequest(booking) {
     await apiFetch(`/api/slot-bookings/${booking.slot_booking_id}/review`, {
       method: 'POST',
       body: JSON.stringify({
-        reviewer_user_id: currentAdmin.id,
+        reviewer_user_id: reviewerUserId,
         action: 'approved',
       })
     });
@@ -1617,7 +2015,11 @@ async function approveSlotBookingRequest(booking) {
 }
 
 async function rejectSlotBookingRequest(booking) {
-  if (!booking || !booking.slot_booking_id || !currentAdmin) {
+  const reviewerUserId = getCurrentAdminReviewerId();
+  if (!reviewerUserId) {
+    return { ok: false, msg: 'Admin session is missing your user ID. Refresh once and sign in again.' };
+  }
+  if (!booking || !booking.slot_booking_id) {
     return { ok: false, msg: 'No matching pending slot booking found.' };
   }
 
@@ -1625,7 +2027,7 @@ async function rejectSlotBookingRequest(booking) {
     await apiFetch(`/api/slot-bookings/${booking.slot_booking_id}/review`, {
       method: 'POST',
       body: JSON.stringify({
-        reviewer_user_id: currentAdmin.id,
+        reviewer_user_id: reviewerUserId,
         action: 'rejected',
         rejection_reason: 'Rejected by library admin.',
       })
@@ -1903,6 +2305,455 @@ function initSlotCancelOtpModal() {
   };
 }
 
+function getIssuedCopiesForBook(book) {
+  const issueTotalCopies = Math.max(Number(book?.issue_total_copies) || 0, 0);
+  const availableCopies = Math.max(Number(book?.available_copies) || 0, 0);
+  return Math.max(issueTotalCopies - availableCopies, 0);
+}
+
+function closeBookActionModal() {
+  currentBookActionConfig = null;
+  const modal = document.getElementById('bookActionModal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function renderBookActionFacts(facts) {
+  const items = Array.isArray(facts)
+    ? facts.filter(item => item && item.label && item.value !== undefined && item.value !== null)
+    : [];
+  if (!items.length) {
+    return '<p class="empty">No extra details available for this action.</p>';
+  }
+  return items.map(item => `
+    <div class="book-action-fact">
+      <span class="book-action-fact-label">${escapeHtml(item.label)}</span>
+      <strong class="book-action-fact-value">${escapeHtml(item.value)}</strong>
+    </div>
+  `).join('');
+}
+
+function openBookActionModal(config) {
+  const modal = document.getElementById('bookActionModal');
+  const titleEl = document.getElementById('bookActionModalTitle');
+  const labelEl = document.getElementById('bookActionModalBookLabel');
+  const hintEl = document.getElementById('bookActionModalHint');
+  const factsEl = document.getElementById('bookActionModalFacts');
+  const confirmButton = document.getElementById('bookActionModalConfirm');
+  if (!modal || !titleEl || !labelEl || !hintEl || !factsEl || !confirmButton) return;
+
+  currentBookActionConfig = config || null;
+  titleEl.textContent = config?.title || 'Book Action';
+  labelEl.textContent = config?.bookLabel || '';
+  hintEl.textContent = config?.hint || '';
+  factsEl.innerHTML = renderBookActionFacts(config?.facts || []);
+  confirmButton.textContent = config?.confirmLabel || 'Continue';
+  confirmButton.disabled = !!config?.confirmDisabled;
+  confirmButton.style.display = typeof config?.onConfirm === 'function' ? '' : 'none';
+
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function initBookActionModal() {
+  const modal = document.getElementById('bookActionModal');
+  const closeButton = document.getElementById('bookActionModalClose');
+  const confirmButton = document.getElementById('bookActionModalConfirm');
+  if (!modal || !closeButton || !confirmButton) return;
+
+  closeButton.onclick = closeBookActionModal;
+  const backdrop = modal.querySelector('.modal-backdrop');
+  if (backdrop) backdrop.onclick = closeBookActionModal;
+
+  confirmButton.onclick = () => {
+    const config = currentBookActionConfig;
+    if (!config || typeof config.onConfirm !== 'function') {
+      closeBookActionModal();
+      return;
+    }
+
+    void runWithButtonLoading(confirmButton, config.loadingText || 'Working...', async () => {
+      try {
+        const result = await config.onConfirm();
+        if (result && result.msg) {
+          showMessage(result.msg, !result.ok);
+        }
+        if (!result || result.ok !== false) {
+          closeBookActionModal();
+        }
+      } catch (error) {
+        showMessage(getErrorMessage(error, 'This action could not be completed.'), true);
+      }
+    });
+  };
+}
+
+function openIssueRequestPrompt(bookId) {
+  if (!currentUser) return;
+  const book = searchBooksById(bookId);
+  if (!book) return;
+
+  const waitlistEntry = getActiveWaitlistEntryForBook(currentUser.id, bookId);
+  const availableCopies = Math.max(Number(book.available_copies) || 0, 0);
+  const issueTotalCopies = Math.max(Number(book.issue_total_copies) || 0, 0);
+  const issuedCopies = getIssuedCopiesForBook(book);
+  const facts = [
+    { label: 'Availability', value: availableCopies > 0 ? `${availableCopies} of ${issueTotalCopies} ready` : 'Currently unavailable' },
+    { label: 'Issued now', value: `${issuedCopies} copy/copies out` },
+    { label: 'Waitlist', value: `${Number(book.waitlist_count || 0)} active reader(s)` },
+  ];
+
+  if (availableCopies > 0) {
+    openBookActionModal({
+      title: 'Request Issue',
+      bookLabel: `${book.title} • ${book.lib}`,
+      hint: 'This book still has issue copies available. Send the request and the library team can approve it.',
+      facts,
+      confirmLabel: 'Send Request',
+      loadingText: 'Requesting...',
+      onConfirm: async () => {
+        const result = await requestIssueBook(currentUser.id, bookId);
+        if (result.ok) await loadUserDashboard();
+        return result;
+      },
+    });
+    return;
+  }
+
+  openBookActionModal({
+    title: waitlistEntry ? 'Issue Unavailable' : 'Book Fully Issued',
+    bookLabel: `${book.title} • ${book.lib}`,
+    hint: waitlistEntry
+      ? `All issue copies are out right now. You are already on the waitlist${waitlistEntry.position ? ` at position ${waitlistEntry.position}` : ''}.`
+      : 'All issue copies are out right now. You can join the waitlist from here instead.',
+    facts,
+    confirmLabel: waitlistEntry ? 'Close' : 'Join Waitlist',
+    loadingText: 'Joining...',
+    onConfirm: waitlistEntry ? null : async () => {
+      const result = await joinWaitlist(currentUser.id, bookId);
+      if (result.ok) await loadUserDashboard();
+      return result;
+    },
+  });
+}
+
+function openPurchaseRequestPrompt(bookId) {
+  if (!currentUser) return;
+  const book = searchBooksById(bookId);
+  if (!book) return;
+
+  openBookActionModal({
+    title: 'Request Purchase',
+    bookLabel: `${book.title} • ${book.lib}`,
+    hint: 'This sends a purchase request to the library admin for review.',
+    facts: [
+      { label: 'Purchase price', value: `Rs ${Number(book.purchase_price || 0).toFixed(2)}` },
+      { label: 'Wishlist', value: `${Number(book.favorite_count || 0)} reader(s) saved this` },
+      { label: 'Reviews', value: `${Number(book.average_rating || 0).toFixed(1)} / 5 from ${Number(book.review_count || 0)} review(s)` },
+    ],
+    confirmLabel: 'Send Request',
+    loadingText: 'Requesting...',
+    onConfirm: async () => {
+      const result = await requestPurchaseBook(currentUser.id, bookId);
+      if (result.ok) await loadUserDashboard();
+      return result;
+    },
+  });
+}
+
+function openSlotActionPrompt(bookId) {
+  if (!currentUser) return;
+  const book = searchBooksById(bookId);
+  if (!book) return;
+
+  const openSlotBooking = getOpenSlotBookingForBook(currentUser.id, bookId);
+  const facts = [
+    { label: 'Slot-booking copies', value: `${Math.max(Number(book.slot_booking_copies) || 0, 0)} per day` },
+    { label: 'Library', value: String(book.lib || 'Unknown library') },
+  ];
+  if (openSlotBooking) {
+    facts.push(
+      { label: 'Current status', value: String(openSlotBooking.status || 'pending').toLowerCase() },
+      { label: 'Booked for', value: `${formatDate(openSlotBooking.slot_date)} • ${getSlotLabel(openSlotBooking.slot_id)}` },
+    );
+    openBookActionModal({
+      title: 'Slot Booking Status',
+      bookLabel: `${book.title} • ${book.lib}`,
+      hint: 'You already have an open slot booking for this book. You can open the cancel flow from here.',
+      facts,
+      confirmLabel: 'Cancel Booking',
+      loadingText: 'Opening...',
+      onConfirm: async () => {
+        openSlotCancelOtpModal(openSlotBooking);
+        return { ok: true };
+      },
+    });
+    return;
+  }
+
+  openBookActionModal({
+    title: 'Request Slot',
+    bookLabel: `${book.title} • ${book.lib}`,
+    hint: 'Pick a date and time in the next step. This popup keeps the card simple and shows the slot summary first.',
+    facts,
+    confirmLabel: 'Continue',
+    loadingText: 'Opening...',
+    onConfirm: async () => {
+      openSlotBookingModal(bookId);
+      return { ok: true };
+    },
+  });
+}
+
+function openFavoriteActionPrompt(bookId) {
+  if (!currentUser) return;
+  const book = searchBooksById(bookId);
+  if (!book) return;
+
+  const favorite = findFavoriteByBookId(currentUser.id, bookId);
+  const isSaved = !!favorite;
+  openBookActionModal({
+    title: isSaved ? 'Remove Saved Book' : 'Save Book',
+    bookLabel: `${book.title} • ${book.lib}`,
+    hint: isSaved
+      ? 'This book is already in your wishlist. You can remove it here.'
+      : 'Save this book to your wishlist so you can find it again quickly.',
+    facts: [
+      { label: 'Wishlist count', value: `${Number(book.favorite_count || 0)} saved reader(s)` },
+      { label: 'Waitlist count', value: `${Number(book.waitlist_count || 0)} active reader(s)` },
+    ],
+    confirmLabel: isSaved ? 'Remove' : 'Save',
+    loadingText: isSaved ? 'Removing...' : 'Saving...',
+    onConfirm: async () => {
+      const result = isSaved
+        ? await removeFavoriteBook(currentUser.id, favorite.favorite_id)
+        : await addBookToFavorites(currentUser.id, bookId);
+      if (result.ok) await loadUserDashboard();
+      return result;
+    },
+  });
+}
+
+function openWaitlistActionPrompt(bookId) {
+  if (!currentUser) return;
+  const book = searchBooksById(bookId);
+  if (!book) return;
+
+  const waitlistEntry = getActiveWaitlistEntryForBook(currentUser.id, bookId);
+  const facts = [
+    {
+      label: 'Issue availability',
+      value: Math.max(Number(book.available_copies) || 0, 0) > 0 ? `${Math.max(Number(book.available_copies) || 0, 0)} copy/copies ready` : 'No issue copies ready',
+    },
+    { label: 'Waitlist size', value: `${Number(book.waitlist_count || 0)} active reader(s)` },
+  ];
+
+  if (waitlistEntry) {
+    facts.push(
+      { label: 'Your status', value: String(waitlistEntry.status || 'waiting').toLowerCase() },
+      { label: 'Your position', value: waitlistEntry.position ? String(waitlistEntry.position) : 'Updating soon' },
+    );
+    openBookActionModal({
+      title: 'Waitlist Status',
+      bookLabel: `${book.title} • ${book.lib}`,
+      hint: 'You are already on the waitlist. If you no longer need the book, you can cancel the waitlist entry here.',
+      facts,
+      confirmLabel: 'Cancel Waitlist',
+      loadingText: 'Cancelling...',
+      onConfirm: async () => {
+        const result = await cancelWaitlistEntry(waitlistEntry);
+        if (result.ok) await loadUserDashboard();
+        return result;
+      },
+    });
+    return;
+  }
+
+  openBookActionModal({
+    title: 'Join Waitlist',
+    bookLabel: `${book.title} • ${book.lib}`,
+    hint: 'Join the waitlist and the next available copy can be routed to you when it is returned.',
+    facts,
+    confirmLabel: 'Join Waitlist',
+    loadingText: 'Joining...',
+    onConfirm: async () => {
+      const result = await joinWaitlist(currentUser.id, bookId);
+      if (result.ok) await loadUserDashboard();
+      return result;
+    },
+  });
+}
+
+function openBookDetailsPrompt(bookId) {
+  const book = searchBooksById(bookId);
+  if (!book) return;
+
+  const readUrl = getBookReadOnlineUrl(book);
+  const readingMode = !readUrl
+    ? 'No reading source linked'
+    : isLocalOriginalReadUrl(readUrl)
+      ? 'Original library file available'
+      : 'Read-online reference available';
+
+  openBookActionModal({
+    title: 'Book Details',
+    bookLabel: `${book.title} • ${book.lib}`,
+    facts: [
+      { label: 'Author', value: String(book.author || 'Unknown author') },
+      { label: 'Purchase price', value: `Rs ${Number(book.purchase_price || 0).toFixed(2)}` },
+      { label: 'Rating', value: `${Number(book.average_rating || 0).toFixed(1)} / 5 from ${Number(book.review_count || 0)} review(s)` },
+      { label: 'Wishlist', value: `${Number(book.favorite_count || 0)} saved reader(s)` },
+      { label: 'Waitlist', value: `${Number(book.waitlist_count || 0)} active reader(s)` },
+      { label: 'Issue copies', value: `${Math.max(Number(book.available_copies) || 0, 0)} available of ${Math.max(Number(book.issue_total_copies) || 0, 0)}` },
+      { label: 'Issued now', value: `${getIssuedCopiesForBook(book)} copy/copies out` },
+      { label: 'Slot-booking copies', value: `${Math.max(Number(book.slot_booking_copies) || 0, 0)} per day` },
+      { label: 'Total copies', value: `${Math.max(Number(book.total_copies) || 0, 0)}` },
+      { label: 'Reading access', value: readingMode },
+    ],
+  });
+}
+
+function closeReviewModal() {
+  currentReviewBookId = null;
+  const modal = document.getElementById('reviewModal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+async function populateReviewModal(bookId) {
+  if (!currentUser) return;
+  const book = searchBooksById(bookId);
+  const titleEl = document.getElementById('reviewModalBookTitle');
+  const summaryEl = document.getElementById('reviewModalSummary');
+  const eligibilityEl = document.getElementById('reviewModalEligibility');
+  const listEl = document.getElementById('reviewModalReviewsList');
+  const ratingEl = document.getElementById('reviewModalRating');
+  const textEl = document.getElementById('reviewModalText');
+  const deleteButton = document.getElementById('reviewModalDelete');
+  const submitButton = document.getElementById('reviewModalSubmit');
+  const form = document.getElementById('reviewModalForm');
+  if (!titleEl || !summaryEl || !eligibilityEl || !listEl || !ratingEl || !textEl || !deleteButton || !submitButton || !form) return;
+
+  titleEl.textContent = book ? `${book.title} • ${book.lib}` : `Book #${bookId}`;
+  summaryEl.textContent = 'Loading reviews...';
+  eligibilityEl.textContent = '';
+  listEl.innerHTML = '<p class="empty">Loading reviews...</p>';
+  deleteButton.style.display = 'none';
+  ratingEl.disabled = false;
+  textEl.disabled = false;
+  submitButton.disabled = false;
+  submitButton.textContent = 'Save Review';
+  form.classList.remove('is-disabled');
+
+  try {
+    const payload = await fetchBookReviews(bookId, currentUser.id);
+    const reviews = Array.isArray(payload.reviews) ? payload.reviews.map(toBookReviewModel) : [];
+    const summary = payload.summary || {};
+    const viewer = payload.viewer || {};
+    const ownReview = reviews.find(review => Number(review.student_id) === Number(currentUser.id)) || null;
+    const canReview = !!viewer.can_review || !!ownReview;
+
+    summaryEl.textContent = `${Number(summary.average_rating || 0).toFixed(1)} / 5 from ${Number(summary.review_count || 0)} review(s)`;
+    eligibilityEl.textContent = canReview
+      ? 'You can add or update a review for this book.'
+      : String(viewer.reason || 'You can review only books you have issued at least once.');
+    ratingEl.value = ownReview ? String(ownReview.rating || 5) : '5';
+    textEl.value = ownReview ? (ownReview.review_text || '') : '';
+    ratingEl.disabled = !canReview;
+    textEl.disabled = !canReview;
+    submitButton.disabled = !canReview;
+    submitButton.textContent = canReview ? 'Save Review' : 'Issue Once to Review';
+    form.classList.toggle('is-disabled', !canReview);
+    deleteButton.style.display = ownReview ? '' : 'none';
+    deleteButton.onclick = () => {
+      if (!ownReview) return;
+      void runButtonActionWithStatus(deleteButton, 'Deleting...', 'Deleted', 'Failed', async () => {
+        const result = await removeBookReview(currentUser.id, ownReview.review_id);
+        if (result.ok) {
+          markCatalogDirty();
+          await refreshCatalogData(true);
+          await loadUserDashboard();
+          await populateReviewModal(bookId);
+        }
+        showMessage(result.msg, !result.ok);
+        return result;
+      });
+    };
+
+    if (!reviews.length) {
+      listEl.innerHTML = `<p class="empty">${canReview ? 'No reviews yet. Be the first to rate this book.' : 'No reviews yet for this book.'}</p>`;
+      return;
+    }
+
+    listEl.innerHTML = reviews.map(review => `
+      <div class="review-entry">
+        <div class="review-entry-head">
+          <strong>${escapeHtml(review.user_name || `User #${review.student_id}`)}</strong>
+          <span class="review-stars">${'★'.repeat(Math.max(0, Math.min(5, review.rating || 0)))}${'☆'.repeat(Math.max(0, 5 - Math.max(0, Math.min(5, review.rating || 0))))}</span>
+        </div>
+        <div class="module-meta">${escapeHtml(formatDateTime(review.updated_at || review.created_at))}</div>
+        <p>${escapeHtml(review.review_text || 'No written comment provided.')}</p>
+      </div>
+    `).join('');
+  } catch (error) {
+    summaryEl.textContent = 'Could not load reviews.';
+    eligibilityEl.textContent = '';
+    listEl.innerHTML = `<p class="empty">${escapeHtml(getErrorMessage(error, 'Could not load reviews.'))}</p>`;
+  }
+}
+
+function openReviewModal(bookId) {
+  if (!currentUser) return;
+  currentReviewBookId = bookId;
+  const modal = document.getElementById('reviewModal');
+  if (!modal) return;
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  void populateReviewModal(bookId);
+}
+
+function initReviewModal() {
+  const modal = document.getElementById('reviewModal');
+  const closeButton = document.getElementById('reviewModalClose');
+  const form = document.getElementById('reviewModalForm');
+  if (!modal || !closeButton || !form) return;
+
+  closeButton.onclick = closeReviewModal;
+  const backdrop = modal.querySelector('.modal-backdrop');
+  if (backdrop) backdrop.onclick = closeReviewModal;
+
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    if (!currentUser || !currentReviewBookId) return;
+    const submitControl = document.getElementById('reviewModalSubmit');
+    if (submitControl && submitControl.disabled) {
+      showMessage('You can review only books you have issued at least once.', true);
+      return;
+    }
+    const rating = parseInt(document.getElementById('reviewModalRating')?.value || '0', 10);
+    const reviewText = document.getElementById('reviewModalText')?.value.trim() || '';
+    const submitButton = event.submitter || form.querySelector('button[type="submit"]');
+    if (isNaN(rating) || rating < 1 || rating > 5) {
+      showMessage('Choose a rating between 1 and 5.', true);
+      return;
+    }
+
+    void runButtonActionWithStatus(submitButton, 'Saving...', 'Saved', 'Failed', async () => {
+      const result = await saveBookReview(currentUser.id, currentReviewBookId, rating, reviewText);
+      if (result.ok) {
+        markCatalogDirty();
+        await refreshCatalogData(true);
+        await loadUserDashboard();
+        await populateReviewModal(currentReviewBookId);
+      }
+      showMessage(result.msg, !result.ok);
+      return result;
+    });
+  };
+}
+
 function getSlotBookingsForUser(studentId) {
   return getSlotBookings().filter(booking => Number(booking.student_id) === Number(studentId));
 }
@@ -1941,12 +2792,19 @@ function clearAppLocalStorage() {
   savePurchaseRequests([]);
   saveIssueHistory([]);
   saveSlotBookings([]);
+  saveFavorites([]);
+  saveWaitlistEntries([]);
+  saveNotifications([]);
   saveQueue([]);
   saveLibraries([]);
   saveVisitSlots([]);
   saveDeveloperUsers([]);
   saveDeveloperLogs([]);
   apiState.developerMetrics = {};
+  apiState.userMetrics = {};
+  apiState.adminMetrics = {};
+  saveAdminTopBooks([]);
+  saveAdminRecentReviews([]);
   markCatalogDirty();
 }
 
@@ -2000,8 +2858,11 @@ let developerDashboardLoadPromise = null;
 let catalogLoadedAt = 0;
 let currentSlotBookingBookId = null;
 let pendingSlotCancellationBooking = null;
+let currentReviewBookId = null;
+let currentBookActionConfig = null;
 let brandLoaderStartedAt = 0;
 let brandLoaderClosingPromise = null;
+const SCREEN_HISTORY_STATE_KEY = 'smartLibraryScreenId';
 const userBookSearchState = {
   searchType: 'title',
   query: '',
@@ -2029,8 +2890,8 @@ const dashboardHydrationState = {
   developer: false,
 };
 const DASHBOARD_SKELETON_SECTIONS = {
-  user: ['profile', 'books', 'issued', 'requests', 'purchaseRequests', 'slotBookings', 'approvedSlots'],
-  admin: ['profile', 'books', 'requests', 'purchaseRequests', 'approvedLoans', 'slotBookings', 'approvedSlots'],
+  user: ['profile', 'books', 'issued', 'requests', 'purchaseRequests', 'slotBookings', 'approvedSlots', 'wishlist', 'waitlist', 'notifications'],
+  admin: ['profile', 'analytics', 'books', 'requests', 'purchaseRequests', 'approvedLoans', 'slotBookings', 'approvedSlots'],
   developer: ['profile', 'stats', 'users', 'logs'],
 };
 
@@ -2045,6 +2906,9 @@ const USER_SCREEN_IDS = new Set([
   'user-purchase-requests-screen',
   'user-slot-bookings-screen',
   'user-approved-slots-screen',
+  'user-wishlist-screen',
+  'user-waitlist-screen',
+  'user-notifications-screen',
 ]);
 const ADMIN_SCREEN_IDS = new Set([
   'admin-dashboard',
@@ -2059,6 +2923,58 @@ const DEVELOPER_SCREEN_IDS = new Set([
   'developer-users-screen',
   'developer-logs-screen',
 ]);
+
+function getDefaultScreenId() {
+  if (currentDeveloper) return 'developer-dashboard';
+  if (currentAdmin) return 'admin-dashboard';
+  if (currentUser) return 'user-dashboard';
+  return 'home';
+}
+
+function getCurrentHistoryScreenId() {
+  const state = window.history && window.history.state ? window.history.state : null;
+  const screenId = state && state[SCREEN_HISTORY_STATE_KEY];
+  return String(screenId || '').trim();
+}
+
+function writeScreenHistoryState(screenId, mode = 'push') {
+  if (!window.history || typeof window.history.pushState !== 'function') return;
+  const normalizedId = String(screenId || '').trim() || getDefaultScreenId();
+  const nextState = {
+    ...(window.history.state || {}),
+    [SCREEN_HISTORY_STATE_KEY]: normalizedId,
+  };
+
+  if (mode === 'replace') {
+    window.history.replaceState(nextState, '', window.location.href);
+    return;
+  }
+
+  if (getCurrentHistoryScreenId() === normalizedId) return;
+  window.history.pushState(nextState, '', window.location.href);
+}
+
+function isKnownScreenId(id) {
+  const element = document.getElementById(String(id || '').trim());
+  return !!(element && element.classList.contains('screen'));
+}
+
+function normalizeScreenIdForAccess(id) {
+  const candidate = String(id || '').trim();
+  if (!candidate || !isKnownScreenId(candidate)) {
+    return getDefaultScreenId();
+  }
+  if (USER_SCREEN_IDS.has(candidate) && !currentUser) {
+    return getDefaultScreenId();
+  }
+  if (ADMIN_SCREEN_IDS.has(candidate) && !currentAdmin) {
+    return getDefaultScreenId();
+  }
+  if (DEVELOPER_SCREEN_IDS.has(candidate) && !currentDeveloper) {
+    return getDefaultScreenId();
+  }
+  return candidate;
+}
 
 function updateNav() {
   const loginBtn = document.getElementById('navLogin');
@@ -2124,6 +3040,10 @@ function buildBooksSignature(books) {
       book.total_copies,
       book.lib,
       book.read_online_url,
+      book.average_rating,
+      book.review_count,
+      book.waitlist_count,
+      book.favorite_count,
     ].join('|')
   );
 }
@@ -2190,6 +3110,70 @@ function buildSlotBookingsSignature(bookings) {
       booking.lib,
       toIsoDate(booking.request_date),
       toIsoDate(booking.slot_date),
+    ].join('|')
+  );
+}
+
+function buildFavoritesSignature(favorites) {
+  return buildSignature(favorites, favorite =>
+    [
+      favorite.favorite_id,
+      favorite.student_id,
+      favorite.book_id,
+      favorite.created_at || '',
+    ].join('|')
+  );
+}
+
+function buildWaitlistSignature(entries) {
+  return buildSignature(entries, entry =>
+    [
+      entry.waitlist_entry_id,
+      entry.student_id,
+      entry.book_id,
+      entry.status,
+      entry.position,
+      entry.notified_at || '',
+      entry.created_at || '',
+    ].join('|')
+  );
+}
+
+function buildNotificationsSignature(items) {
+  return buildSignature(items, item =>
+    [
+      item.notification_id,
+      item.user_id,
+      item.category,
+      item.title,
+      item.is_read ? 1 : 0,
+      item.created_at || '',
+    ].join('|')
+  );
+}
+
+function buildAdminTopBooksSignature(items) {
+  return buildSignature(items, item =>
+    [
+      item.book_id,
+      item.loan_count || 0,
+      item.pending_borrow_requests || 0,
+      item.waitlist_count || 0,
+      item.review_count || 0,
+      item.average_rating || 0,
+    ].join('|')
+  );
+}
+
+function buildReviewSignature(items) {
+  return buildSignature(items, item =>
+    [
+      item.review_id,
+      item.book_id,
+      item.student_id,
+      item.rating,
+      item.updated_at || '',
+      item.review_text || '',
     ].join('|')
   );
 }
@@ -2376,7 +3360,30 @@ function showDashboardSkeleton(scope, keys) {
       return;
     }
     if (scope === 'admin') {
-      if (key === 'books') renderBooksSkeleton('adminBooksList', { pagerId: 'adminBooksListPager' });
+      if (key === 'analytics') {
+        [
+          'adminAnalyticsTotalBooks',
+          'adminAnalyticsAvailableCopies',
+          'adminAnalyticsActiveLoans',
+          'adminAnalyticsPendingBorrows',
+          'adminAnalyticsPendingPurchases',
+          'adminAnalyticsPendingSlots',
+          'adminAnalyticsWaitlistEntries',
+          'adminAnalyticsAverageRating',
+        ].forEach(id => setTextSkeleton(id, 'skeleton-w-sm'));
+        renderModuleListSkeleton('adminAnalyticsTopBooksList', {
+          count: 4,
+          lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-sm'],
+          actionWidths: [],
+          leadingPill: false,
+        });
+        renderModuleListSkeleton('adminAnalyticsRecentReviewsList', {
+          count: 4,
+          lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-xl'],
+          actionWidths: [],
+          leadingPill: false,
+        });
+      } else if (key === 'books') renderBooksSkeleton('adminBooksList', { pagerId: 'adminBooksListPager' });
       else if (key === 'requests') {
         renderModuleListSkeleton('adminIssueRequestsList', {
           lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-xl', 'skeleton-w-md'],
@@ -2452,6 +3459,19 @@ function showDashboardSkeleton(scope, keys) {
     } else if (key === 'approvedSlots') {
       renderModuleListSkeleton('userApprovedSlotBookingsList', {
         lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-sm', 'skeleton-w-xl'],
+        actionWidths: ['skeleton-w-sm'],
+      });
+    } else if (key === 'wishlist') {
+      renderBooksSkeleton('userWishlistList');
+    } else if (key === 'waitlist') {
+      renderModuleListSkeleton('userWaitlistList', {
+        lineWidths: ['skeleton-w-lg', 'skeleton-w-md', 'skeleton-w-sm', 'skeleton-w-md'],
+        actionWidths: ['skeleton-w-sm'],
+      });
+    } else if (key === 'notifications') {
+      renderModuleListSkeleton('userNotificationsList', {
+        count: 5,
+        lineWidths: ['skeleton-w-lg', 'skeleton-w-xl', 'skeleton-w-md'],
         actionWidths: ['skeleton-w-sm'],
       });
     }
@@ -2651,12 +3671,20 @@ function getVisibleUserBooks() {
   );
 }
 
-function showScreen(id) {
-  activeScreenId = id;
+function showScreen(id, options = {}) {
+  const normalizedId = normalizeScreenIdForAccess(id);
+  const previousScreenId = activeScreenId;
+  const historyMode = options.historyMode || 'push';
+  activeScreenId = normalizedId;
   document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
-  const el = document.getElementById(id);
+  const el = document.getElementById(normalizedId);
   if (el) el.classList.add('active');
-  if (id === 'contact-page') prefillContactEmailField();
+  if (normalizedId === 'contact-page') prefillContactEmailField();
+  if (historyMode === 'replace') {
+    writeScreenHistoryState(normalizedId, 'replace');
+  } else if (historyMode === 'push' && previousScreenId !== normalizedId) {
+    writeScreenHistoryState(normalizedId, 'push');
+  }
   updateNav();
   updateDashboardPolling();
 }
@@ -2902,8 +3930,17 @@ function renderBooksList(containerId, books, options = {}) {
   container._lastOptions = options;
 
   container.innerHTML = slice.map(b => {
+    const isCompactCard = !!options.compactCard;
     const coverUrl = bookCoverDataUri(b);
-    const readOnlineAction = renderReadOnlineAction(b);
+    const readOnlineAction = isCompactCard
+      ? `<button type="button" class="btn btn-sm btn-ghost" data-details="${b.book_id}">Details</button>`
+      : renderReadOnlineAction(b);
+    const favorite = options.showFavoriteToggle && currentUser
+      ? findFavoriteByBookId(currentUser.id, b.book_id)
+      : null;
+    const waitlistEntry = options.showWaitlist && currentUser
+      ? getActiveWaitlistEntryForBook(currentUser.id, b.book_id)
+      : null;
     const openSlotBooking = options.showSlot && currentUser
       ? getOpenSlotBookingForBook(currentUser.id, b.book_id)
       : null;
@@ -2912,8 +3949,11 @@ function renderBooksList(containerId, books, options = {}) {
     const slotStatusNote = openSlotBooking
       ? `${formatDate(openSlotBooking.slot_date)} • ${getSlotLabel(openSlotBooking.slot_id)}`
       : '';
+    const showWaitlistControl = !!options.showWaitlist && !!currentUser && (!!waitlistEntry || Number(b.available_copies) < 1);
     const slotAction = !options.showSlot || b.slot_booking_copies < 1
       ? ''
+      : isCompactCard
+        ? `<button type="button" class="btn btn-sm" data-slot="${b.book_id}">${openSlotBooking ? 'Slot Status' : 'Request Slot'}</button>`
       : openSlotBooking
         ? `
           <div class="book-slot-summary">
@@ -2922,24 +3962,63 @@ function renderBooksList(containerId, books, options = {}) {
           </div>
         `
         : `<button type="button" class="btn btn-sm" data-slot="${b.book_id}">Request Slot</button>`;
-    return `
-    <div class="book-card" data-book-id="${b.book_id}">
-      <div class="book-cover" style="${bookCoverStyle(b)}">
-        <img class="book-cover-img" src="${coverUrl}" alt="${escapeHtml(b.title)} cover" loading="lazy">
-      </div>
-      <div class="book-meta">
+    const waitlistAction = !showWaitlistControl
+      ? ''
+      : isCompactCard
+        ? `<button type="button" class="btn btn-sm" data-waitlist="${b.book_id}">${waitlistEntry ? 'Waitlist Status' : 'Join Waitlist'}</button>`
+      : waitlistEntry
+        ? `
+          <div class="book-waitlist-summary">
+            <span class="status-pill ${requestStatusClass(waitlistEntry.status)}">Waitlist ${escapeHtml(waitlistEntry.status)}</span>
+            <span class="book-slot-note">${waitlistEntry.position ? `Position ${waitlistEntry.position}` : 'Waiting for update'}</span>
+          </div>
+        `
+        : `<button type="button" class="btn btn-sm" data-waitlist="${b.book_id}">Join Waitlist</button>`;
+    const requestDisabled = !isCompactCard && options.showRequest && b.available_copies < 1 ? 'disabled' : '';
+    const availabilityBadgeClass = Number(b.available_copies || 0) > 0 ? 'available' : 'unavailable';
+    const availabilityBadgeText = Number(b.available_copies || 0) > 0
+      ? `${Number(b.available_copies || 0)} available now`
+      : 'All issue copies are out';
+    const ratingBadgeText = Number(b.review_count || 0) > 0
+      ? `${Number(b.average_rating || 0).toFixed(1)} / 5`
+      : 'No reviews yet';
+    const metaMarkup = isCompactCard
+      ? `
+        <div class="book-id">#${b.book_id}</div>
+        <h3>${escapeHtml(b.title)}</h3>
+        <p class="author">${escapeHtml(b.author)}</p>
+        <p class="lib">${escapeHtml(b.lib)}</p>
+        <div class="book-badge-row">
+          <span class="book-badge ${availabilityBadgeClass}">${escapeHtml(availabilityBadgeText)}</span>
+          <span class="book-badge neutral">${escapeHtml(ratingBadgeText)}</span>
+        </div>
+      `
+      : `
         <div class="book-id">#${b.book_id}</div>
         <h3>${escapeHtml(b.title)}</h3>
         <p class="author">${escapeHtml(b.author)}</p>
         <p class="lib">${escapeHtml(b.lib)}</p>
         <p class="price">Purchase price: Rs ${Number(b.purchase_price || 0).toFixed(2)}</p>
+        <p class="book-statline">Rating: ${Number(b.average_rating || 0).toFixed(1)} / 5 from ${Number(b.review_count || 0)} review(s)</p>
+        <p class="book-statline">Wishlist: ${Number(b.favorite_count || 0)} saved • Waitlist: ${Number(b.waitlist_count || 0)} active</p>
         <p class="copies">Issue available: ${b.available_copies} / ${b.issue_total_copies}</p>
         <p class="copies">Slot-booking copies: ${b.slot_booking_copies} per day</p>
         <p class="copies">Total copies: ${b.total_copies}</p>
-        <div class="book-actions">
-          ${options.showRequest ? `<button type="button" class="btn btn-sm" data-request="${b.book_id}">Request Issue</button>` : ''}
+      `;
+    return `
+    <div class="book-card" data-book-id="${b.book_id}">
+      <div class="book-cover" style="${bookCoverStyle(b)}">
+        <img class="book-cover-img" src="${coverUrl}" alt="${escapeHtml(b.title)} cover" loading="lazy">
+      </div>
+      <div class="book-meta${isCompactCard ? ' compact' : ''}">
+        ${metaMarkup}
+        <div class="book-actions${isCompactCard ? ' compact' : ''}">
+          ${options.showRequest ? `<button type="button" class="btn btn-sm" data-request="${b.book_id}" ${requestDisabled}>${isCompactCard ? 'Request Issue' : (b.available_copies > 0 ? 'Request Issue' : 'Issue Unavailable')}</button>` : ''}
           ${options.showPurchase ? `<button type="button" class="btn btn-sm" data-purchase="${b.book_id}">Request Purchase</button>` : ''}
           ${slotAction}
+          ${waitlistAction}
+          ${options.showFavoriteToggle && currentUser ? `<button type="button" class="btn btn-sm${favorite ? ' is-active' : ''}" data-favorite="${b.book_id}">${favorite ? 'Saved' : 'Save'}</button>` : ''}
+          ${options.showReviews ? `<button type="button" class="btn btn-sm btn-ghost" data-reviews="${b.book_id}">Reviews</button>` : ''}
           ${readOnlineAction}
           ${options.showEdit ? `<button type="button" class="btn btn-sm" data-edit="${b.book_id}">Edit</button>` : ''}
           ${options.showDelete ? `<button type="button" class="btn btn-sm danger" data-delete="${b.book_id}">Delete</button>` : ''}
@@ -2962,6 +4041,26 @@ function renderBooksList(containerId, books, options = {}) {
   if (options.onSlot) {
     container.querySelectorAll('[data-slot]').forEach(btn => {
       btn.addEventListener('click', () => options.onSlot(parseInt(btn.dataset.slot, 10)));
+    });
+  }
+  if (options.onWaitlist) {
+    container.querySelectorAll('[data-waitlist]').forEach(btn => {
+      btn.addEventListener('click', () => options.onWaitlist(parseInt(btn.dataset.waitlist, 10), btn));
+    });
+  }
+  if (options.onFavoriteToggle) {
+    container.querySelectorAll('[data-favorite]').forEach(btn => {
+      btn.addEventListener('click', () => options.onFavoriteToggle(parseInt(btn.dataset.favorite, 10), btn));
+    });
+  }
+  if (options.onReviews) {
+    container.querySelectorAll('[data-reviews]').forEach(btn => {
+      btn.addEventListener('click', () => options.onReviews(parseInt(btn.dataset.reviews, 10), btn));
+    });
+  }
+  if (options.onDetails) {
+    container.querySelectorAll('[data-details]').forEach(btn => {
+      btn.addEventListener('click', () => options.onDetails(parseInt(btn.dataset.details, 10), btn));
     });
   }
   if (options.onEdit) {
@@ -3007,6 +4106,7 @@ function requestStatusClass(status) {
   switch (String(status || '').toLowerCase()) {
     case 'approved':
     case 'fulfilled':
+    case 'notified':
       return 'approved';
     case 'rejected':
     case 'expired':
@@ -3227,6 +4327,131 @@ function renderSlotBookingsList(containerId, slotBookings, options = {}) {
   }
 }
 
+function renderWaitlistEntriesList(containerId, entries, options = {}) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  setLoadingRegion(container, false);
+
+  if (!entries || entries.length === 0) {
+    container.innerHTML = `<p class="empty">${escapeHtml(options.emptyText || 'No waitlist entries found.')}</p>`;
+    return;
+  }
+
+  container.innerHTML = entries.map((entry, index) => {
+    const book = searchBooksById(entry.book_id);
+    const title = book ? book.title : `Book #${entry.book_id}`;
+    const lib = entry.lib || (book ? book.lib : 'Unknown library');
+    const positionLine = entry.position ? `Position ${entry.position}` : 'Position pending';
+    const notifiedLine = entry.notified_at ? `Notified on ${escapeHtml(formatDateTime(entry.notified_at))}` : '';
+    return `
+      <div class="issued-card module-card">
+        <div class="module-copy">
+          <strong>${escapeHtml(title)}</strong>
+          <div class="module-meta">Book ID: ${entry.book_id} • ${escapeHtml(lib)}</div>
+          <div class="module-meta">${escapeHtml(positionLine)}</div>
+          <div class="module-meta">Joined on ${escapeHtml(formatDateTime(entry.created_at))}</div>
+          ${notifiedLine ? `<div class="module-meta">${notifiedLine}</div>` : ''}
+        </div>
+        <div class="module-actions">
+          <span class="status-pill ${requestStatusClass(entry.status)}">${escapeHtml(entry.status)}</span>
+          ${options.showCancel && String(entry.status).toLowerCase() === 'waiting' ? `<button type="button" class="btn btn-sm danger" data-cancel-waitlist="${index}">Cancel</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  if (options.onCancel) {
+    container.querySelectorAll('[data-cancel-waitlist]').forEach(button => {
+      button.addEventListener('click', () => {
+        const entry = entries[parseInt(button.dataset.cancelWaitlist, 10)];
+        options.onCancel(entry, button);
+      });
+    });
+  }
+}
+
+function renderNotificationsList(containerId, notifications, options = {}) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  setLoadingRegion(container, false);
+
+  if (!notifications || notifications.length === 0) {
+    container.innerHTML = `<p class="empty">${escapeHtml(options.emptyText || 'No notifications yet.')}</p>`;
+    return;
+  }
+
+  container.innerHTML = notifications.map((item, index) => `
+    <div class="issued-card module-card notification-card${item.is_read ? '' : ' notification-unread'}">
+      <div class="module-copy">
+        <strong>${escapeHtml(item.title)}</strong>
+        <div class="module-meta">${escapeHtml(formatDateTime(item.created_at))} • ${escapeHtml(item.category)}</div>
+        <div class="module-meta">${escapeHtml(item.message)}</div>
+        ${item.book_title ? `<div class="module-meta">${escapeHtml(item.book_title)}${item.lib ? ` • ${escapeHtml(item.lib)}` : ''}</div>` : ''}
+      </div>
+      <div class="module-actions">
+        <span class="status-pill ${item.is_read ? 'approved' : 'pending'}">${item.is_read ? 'Read' : 'Unread'}</span>
+        ${options.showMarkRead && !item.is_read ? `<button type="button" class="btn btn-sm" data-mark-read="${index}">Mark Read</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+
+  if (options.onMarkRead) {
+    container.querySelectorAll('[data-mark-read]').forEach(button => {
+      button.addEventListener('click', () => {
+        const item = notifications[parseInt(button.dataset.markRead, 10)];
+        options.onMarkRead(item, button);
+      });
+    });
+  }
+}
+
+function renderAdminTopBooksList(containerId, books) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  setLoadingRegion(container, false);
+
+  if (!books || books.length === 0) {
+    container.innerHTML = '<p class="empty">No analytics highlights yet.</p>';
+    return;
+  }
+
+  container.innerHTML = books.map(book => `
+    <div class="issued-card module-card">
+      <div class="module-copy">
+        <strong>${escapeHtml(book.title || `Book #${book.book_id}`)}</strong>
+        <div class="module-meta">${escapeHtml(book.author || 'Unknown author')}</div>
+        <div class="module-meta">Loans: ${Number(book.loan_count || 0)} • Pending requests: ${Number(book.pending_borrow_requests || 0)}</div>
+        <div class="module-meta">Waitlist: ${Number(book.waitlist_count || 0)} • Reviews: ${Number(book.review_count || 0)}</div>
+      </div>
+      <div class="module-actions">
+        <span class="status-pill approved">${Number(book.average_rating || 0).toFixed(1)} / 5</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderAdminRecentReviewsList(containerId, reviews) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  setLoadingRegion(container, false);
+
+  if (!reviews || reviews.length === 0) {
+    container.innerHTML = '<p class="empty">No book reviews have been submitted yet.</p>';
+    return;
+  }
+
+  container.innerHTML = reviews.map(review => `
+    <div class="issued-card module-card">
+      <div class="module-copy">
+        <strong>${escapeHtml(review.book_title || `Book #${review.book_id}`)}</strong>
+        <div class="module-meta">${escapeHtml(review.user_name || 'Unknown member')} • ${escapeHtml(formatDateTime(review.updated_at || review.created_at))}</div>
+        <div class="module-meta review-stars">Rating: ${'★'.repeat(Math.max(0, Math.min(5, review.rating || 0)))}${'☆'.repeat(Math.max(0, 5 - Math.max(0, Math.min(5, review.rating || 0))))}</div>
+        <div class="module-meta">${escapeHtml(review.review_text || 'No written comment provided.')}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
 function renderIssuedRecordsList(containerId, issuedRecords, options = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -3392,15 +4617,23 @@ function initNav() {
   if (logoutBtn) {
     logoutBtn.onclick = async () => {
       await logoutCurrentSession();
-      currentDeveloper = null;
-      currentAdmin = null;
-      currentUser = null;
+      clearAuthenticatedIdentity();
       pendingSlotCancellationBooking = null;
+      currentReviewBookId = null;
+      closeBookActionModal();
+      closeReviewModal();
       resetUserBookSearchState();
       resetAdminAddBookDraft();
       pendingReg = null;
       pendingPasswordResetEmail = null;
       startAuditSession();
+      saveFavorites([]);
+      saveWaitlistEntries([]);
+      saveNotifications([]);
+      saveAdminTopBooks([]);
+      saveAdminRecentReviews([]);
+      apiState.userMetrics = {};
+      apiState.adminMetrics = {};
       resetDashboardRenderState();
       showScreen('home');
       updateNav();
@@ -3502,7 +4735,12 @@ function initAdminRegisterOtp() {
         if (!verifyResult.ok) { showMessage(verifyResult.msg || 'Invalid OTP', true); return; }
         const result = await registerAdmin(pendingReg.name, pendingReg.email, pendingReg.password, pendingReg.lib);
         pendingReg = null;
-        if (result.ok) { showMessage('Registration successful'); showScreen('user-login'); }
+        if (result.ok) {
+          showMessage('Registration successful');
+          document.getElementById('adminRegForm').reset();
+          document.getElementById('adminOtpForm').reset();
+          await applyAuthenticatedIdentity(result.admin, { openDashboard: true });
+        }
         else showMessage(result.msg, true);
       })
     );
@@ -3546,6 +4784,19 @@ async function loadAdminDashboard(options = {}) {
     setTextIfChanged('adminInfoId', currentAdmin.id);
     setTextIfChanged('adminInfoEmail', currentAdmin.email);
     syncAdminAddBookControls();
+    const analytics = apiState.adminMetrics || {};
+    setTextIfChanged('adminAnalyticsTotalBooks', analytics.total_books || 0);
+    setTextIfChanged('adminAnalyticsAvailableCopies', analytics.available_issue_copies || 0);
+    setTextIfChanged('adminAnalyticsActiveLoans', analytics.active_loans || 0);
+    setTextIfChanged('adminAnalyticsPendingBorrows', analytics.pending_borrow_requests || 0);
+    setTextIfChanged('adminAnalyticsPendingPurchases', analytics.pending_purchase_requests || 0);
+    setTextIfChanged('adminAnalyticsPendingSlots', analytics.pending_slot_requests || 0);
+    setTextIfChanged('adminAnalyticsWaitlistEntries', analytics.active_waitlist_entries || 0);
+    setTextIfChanged('adminAnalyticsAverageRating', Number(analytics.average_rating || 0).toFixed(1));
+    renderDashboardSection('admin', 'analytics', `${currentAdmin.id}:${JSON.stringify(analytics || {})}:${buildAdminTopBooksSignature(getAdminTopBooks())}:${buildReviewSignature(getAdminRecentReviews())}`, () => {
+      renderAdminTopBooksList('adminAnalyticsTopBooksList', getAdminTopBooks());
+      renderAdminRecentReviewsList('adminAnalyticsRecentReviewsList', getAdminRecentReviews());
+    });
     const books = booksForLibrary(currentAdmin.lib);
     renderDashboardSection('admin', 'books', `${currentAdmin.id}:${buildBooksSignature(books)}`, () => {
       renderBooksList('adminBooksList', books, {
@@ -3584,11 +4835,13 @@ async function loadAdminDashboard(options = {}) {
               return result;
             }
             approvedLoansPanelOpen = true;
-            const emailResult = await sendIssueApprovalEmail(result.approvalEmailData);
-            if (emailResult.ok) {
+            if (result.approvalEmailSent) {
               showMessage(result.msg + ' Confirmation email sent to the student.');
             } else {
-              showMessage(result.msg + ' But the confirmation email could not be sent.', true);
+              const emailSuffix = result.approvalEmailError
+                ? ` But the confirmation email could not be sent: ${result.approvalEmailError}`
+                : ' But the confirmation email could not be sent.';
+              showMessage(result.msg + emailSuffix, true);
             }
             return result;
           }).then(async result => {
@@ -3895,16 +5148,10 @@ function initUserRegisterOtp() {
         const result = await registerUser(pendingReg.name, pendingReg.email, pendingReg.password);
         pendingReg = null;
         if (result.ok) {
-          currentDeveloper = null;
-          currentAdmin = null;
-          currentUser = result.user;
-          resetDashboardRenderState('user');
           document.getElementById('userRegForm').reset();
           document.getElementById('userOtpForm').reset();
           showMessage('Registration successful');
-          showScreen('user-dashboard');
-          await loadUserDashboard();
-          updateNav();
+          await applyAuthenticatedIdentity(result.user, { openDashboard: true });
         }
         else showMessage(result.msg, true);
       })
@@ -3968,38 +5215,20 @@ function initUserLogin() {
         return;
       }
       if (baseResult.type === 'developer') {
-        currentDeveloper = baseResult.developer;
-        currentAdmin = null;
-        currentUser = null;
-        resetDashboardRenderState('developer');
         document.getElementById('userLoginPassword').value = '';
         showMessage('Login successful');
-        showScreen('developer-dashboard');
-        await loadDeveloperDashboard();
-        updateNav();
+        await applyAuthenticatedIdentity(baseResult.developer, { openDashboard: true });
         return;
       }
       if (baseResult.type === 'admin') {
-        currentDeveloper = null;
-        currentAdmin = baseResult.admin;
-        currentUser = null;
-        resetDashboardRenderState('admin');
         document.getElementById('userLoginPassword').value = '';
         showMessage('Login successful');
-        showScreen('admin-dashboard');
-        await loadAdminDashboard();
-        updateNav();
+        await applyAuthenticatedIdentity(baseResult.admin, { openDashboard: true });
         return;
       }
-      currentDeveloper = null;
-      currentAdmin = null;
-      currentUser = baseResult.user;
-      resetDashboardRenderState('user');
       document.getElementById('userLoginPassword').value = '';
       showMessage('Login successful');
-      showScreen('user-dashboard');
-      await loadUserDashboard();
-      updateNav();
+      await applyAuthenticatedIdentity(baseResult.user, { openDashboard: true });
     });
   };
 }
@@ -4186,36 +5415,39 @@ async function loadUserDashboard(options = {}) {
     setTextIfChanged('userInfoName', currentUser.name);
     setTextIfChanged('userInfoEmail', currentUser.email);
     setTextIfChanged('userInfoId', currentUser.id);
+    setTextIfChanged('userNotificationsUnread', getUnreadNotificationsCount(currentUser.id));
     const visibleBooks = getVisibleUserBooks();
     renderDashboardSection('user', 'books', `${currentUser.id}:${userBookSearchState.libraryFilter}:${userBookSearchState.searchType}:${userBookSearchState.query}:${buildBooksSignature(visibleBooks)}`, () => {
       renderBooksList('userBooksList', visibleBooks, {
+        compactCard: true,
         showRequest: true,
         showPurchase: true,
         showSlot: true,
+        showWaitlist: true,
+        showFavoriteToggle: true,
+        showReviews: true,
         pagerId: 'userBooksListPager',
         pagination: true,
-        onRequest: (bookId, button) => {
-          void runButtonActionWithStatus(button, 'Requesting...', 'Requested', 'Failed', async () => {
-            const result = await requestIssueBook(currentUser.id, bookId);
-            if (result.ok) {
-              await loadUserDashboard();
-            }
-            showMessage(result.msg, !result.ok);
-            return result;
-          });
+        onRequest: (bookId) => {
+          openIssueRequestPrompt(bookId);
         },
-        onPurchase: (bookId, button) => {
-          void runButtonActionWithStatus(button, 'Requesting...', 'Requested', 'Failed', async () => {
-            const result = await requestPurchaseBook(currentUser.id, bookId);
-            if (result.ok) {
-              await loadUserDashboard();
-            }
-            showMessage(result.msg, !result.ok);
-            return result;
-          });
+        onPurchase: (bookId) => {
+          openPurchaseRequestPrompt(bookId);
         },
         onSlot: (bookId) => {
-          openSlotBookingModal(bookId);
+          openSlotActionPrompt(bookId);
+        },
+        onWaitlist: (bookId) => {
+          openWaitlistActionPrompt(bookId);
+        },
+        onFavoriteToggle: (bookId) => {
+          openFavoriteActionPrompt(bookId);
+        },
+        onReviews: (bookId) => {
+          openReviewModal(bookId);
+        },
+        onDetails: (bookId) => {
+          openBookDetailsPrompt(bookId);
         }
       });
     });
@@ -4315,6 +5547,74 @@ async function loadUserDashboard(options = {}) {
         }
       });
     });
+
+    const wishlistBooks = getFavoritesForUser(currentUser.id)
+      .map(favorite => searchBooksById(favorite.book_id))
+      .filter(Boolean);
+    renderDashboardSection('user', 'wishlist', `${currentUser.id}:${buildFavoritesSignature(getFavoritesForUser(currentUser.id))}:${buildBooksSignature(wishlistBooks)}`, () => {
+      renderBooksList('userWishlistList', wishlistBooks, {
+        compactCard: true,
+        showRequest: true,
+        showPurchase: true,
+        showSlot: true,
+        showWaitlist: true,
+        showFavoriteToggle: true,
+        showReviews: true,
+        onRequest: (bookId) => {
+          openIssueRequestPrompt(bookId);
+        },
+        onPurchase: (bookId) => {
+          openPurchaseRequestPrompt(bookId);
+        },
+        onSlot: (bookId) => {
+          openSlotActionPrompt(bookId);
+        },
+        onWaitlist: (bookId) => {
+          openWaitlistActionPrompt(bookId);
+        },
+        onFavoriteToggle: (bookId) => {
+          openFavoriteActionPrompt(bookId);
+        },
+        onReviews: (bookId) => {
+          openReviewModal(bookId);
+        },
+        onDetails: (bookId) => {
+          openBookDetailsPrompt(bookId);
+        }
+      });
+    });
+
+    const waitlistEntries = getWaitlistEntriesForUser(currentUser.id);
+    renderDashboardSection('user', 'waitlist', `${currentUser.id}:${buildWaitlistSignature(waitlistEntries)}`, () => {
+      renderWaitlistEntriesList('userWaitlistList', waitlistEntries, {
+        emptyText: 'You are not waiting for any books right now.',
+        showCancel: true,
+        onCancel: (entry, button) => {
+          void runButtonActionWithStatus(button, 'Cancelling...', 'Cancelled', 'Failed', async () => {
+            const result = await cancelWaitlistEntry(entry);
+            if (result.ok) await loadUserDashboard();
+            showMessage(result.msg, !result.ok);
+            return result;
+          });
+        }
+      });
+    });
+
+    const notifications = getNotificationsForUser(currentUser.id);
+    renderDashboardSection('user', 'notifications', `${currentUser.id}:${buildNotificationsSignature(notifications)}`, () => {
+      renderNotificationsList('userNotificationsList', notifications, {
+        emptyText: 'You have no notifications yet.',
+        showMarkRead: true,
+        onMarkRead: (item, button) => {
+          void runButtonActionWithStatus(button, 'Updating...', 'Updated', 'Failed', async () => {
+            const result = await markNotificationAsRead(currentUser.id, item.notification_id);
+            if (result.ok) await loadUserDashboard();
+            showMessage(result.msg, !result.ok);
+            return result;
+          });
+        }
+      });
+    });
   })();
 
   try {
@@ -4384,6 +5684,19 @@ function initUserDashboard() {
       void loadUserDashboard({ showSkeleton: true, skeletonKeys: ['books'] });
     });
   }
+
+  const markAllNotificationsButton = document.getElementById('userNotificationsMarkAll');
+  if (markAllNotificationsButton) {
+    markAllNotificationsButton.addEventListener('click', () => {
+      if (!currentUser) return;
+      void runButtonActionWithStatus(markAllNotificationsButton, 'Updating...', 'Updated', 'Failed', async () => {
+        const result = await markAllNotificationsAsRead(currentUser.id);
+        if (result.ok) await loadUserDashboard();
+        showMessage(result.msg, !result.ok);
+        return result;
+      });
+    });
+  }
 }
 
 // ----- Bootstrap -----
@@ -4400,25 +5713,32 @@ async function init() {
     initUserLogin();
     initForgotPassword();
     initDeveloperDashboard();
+    initBookActionModal();
     initSlotBookingModal();
     initSlotCancelOtpModal();
+    initReviewModal();
     initUserDashboard();
+    window.addEventListener('popstate', () => {
+      void syncScreenFromHistoryState(window.history.state || {});
+    });
     document.addEventListener('visibilitychange', () => {
       updateDashboardPolling();
       if (document.visibilityState === 'visible') {
         void pollActiveDashboard();
       }
     });
-    showScreen('home');
+    showScreen(getCurrentHistoryScreenId() || 'home', { historyMode: 'skip' });
     const backendOk = await checkBackend();
     if (backendOk) {
       try {
         await loadBackendDataFromServer();
+        await restoreAuthSession();
       } catch (error) {
         console.error('Initial API load failed:', error);
         showMessage(getErrorMessage(error, 'Initial API load failed.'), true);
       }
     }
+    writeScreenHistoryState(activeScreenId, 'replace');
   } finally {
     await releaseBrandLoader();
   }

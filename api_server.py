@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import secrets
 import sys
 from threading import Lock
 from datetime import date, datetime, time, timedelta, timezone
@@ -39,6 +40,11 @@ from psycopg.rows import dict_row
 from waitress import serve
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
+
+try:
+    from email_server import send_issue_approval_email as deliver_issue_approval_email
+except Exception:
+    deliver_issue_approval_email = None
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -80,6 +86,16 @@ DASHBOARD_CACHE_TTL_SECONDS = max(1, int(os.environ.get("DASHBOARD_CACHE_TTL_SEC
 ACTIVE_SESSION_WINDOW_MINUTES = max(
     1, int(os.environ.get("SMART_LIBRARY_ACTIVE_WINDOW_MINUTES", "5"))
 )
+AUTH_SESSION_COOKIE_NAME = (
+    os.environ.get("SMART_LIBRARY_AUTH_COOKIE_NAME", "smart_library_auth").strip()
+    or "smart_library_auth"
+)
+AUTH_SESSION_TTL_DAYS = max(1, int(os.environ.get("SMART_LIBRARY_AUTH_TTL_DAYS", "30")))
+AUTH_SESSION_TTL_SECONDS = AUTH_SESSION_TTL_DAYS * 24 * 60 * 60
+AUTH_SESSION_COOKIE_SECURE_SETTING = os.environ.get(
+    "SMART_LIBRARY_AUTH_COOKIE_SECURE",
+    "",
+).strip().lower()
 DEFAULT_DEVELOPER_EMAIL = os.environ.get(
     "SMART_LIBRARY_DEVELOPER_EMAIL",
     "developer@smartlibrary.local",
@@ -118,8 +134,44 @@ AUDIT_RESPONSE_FIELDS = (
     "loan_id",
     "slot_booking_id",
     "waitlist_entry_id",
+    "favorite_id",
+    "review_id",
+    "notification_id",
     "status",
 )
+WAITLIST_ACTIVE_STATUSES = ("waiting", "notified")
+WAITLIST_ACTIVE_STATUS_SQL = "('waiting', 'notified')"
+BOOK_STATS_SELECT_SQL = """
+            COALESCE(review_stats.review_count, 0) AS review_count,
+            COALESCE(review_stats.average_rating, 0) AS average_rating,
+            COALESCE(waitlist_stats.waitlist_count, 0) AS waitlist_count,
+            COALESCE(favorite_stats.favorite_count, 0) AS favorite_count
+"""
+BOOK_STATS_JOIN_SQL = """
+        LEFT JOIN (
+            SELECT
+                book_id,
+                COUNT(*) AS review_count,
+                ROUND(AVG(rating)::numeric, 2) AS average_rating
+            FROM book_reviews
+            GROUP BY book_id
+        ) AS review_stats ON review_stats.book_id = b.book_id
+        LEFT JOIN (
+            SELECT
+                book_id,
+                COUNT(*) AS waitlist_count
+            FROM waitlist_entries
+            WHERE status IN ('waiting', 'notified')
+            GROUP BY book_id
+        ) AS waitlist_stats ON waitlist_stats.book_id = b.book_id
+        LEFT JOIN (
+            SELECT
+                book_id,
+                COUNT(*) AS favorite_count
+            FROM favorite_books
+            GROUP BY book_id
+        ) AS favorite_stats ON favorite_stats.book_id = b.book_id
+"""
 
 
 class ApiError(Exception):
@@ -337,7 +389,9 @@ def json_safe(value: Any) -> Any:
 
 
 def response(payload: dict[str, Any], status_code: int = 200):
-    return app.json.response(json_safe(payload)), status_code
+    resp = app.json.response(json_safe(payload))
+    resp.status_code = status_code
+    return resp
 
 
 def success(data: Any | None = None, status_code: int = 200):
@@ -345,6 +399,36 @@ def success(data: Any | None = None, status_code: int = 200):
     if data is not None:
         payload["data"] = data
     return response(payload, status_code)
+
+
+def should_use_secure_auth_cookie() -> bool:
+    if AUTH_SESSION_COOKIE_SECURE_SETTING in {"1", "true", "yes", "on"}:
+        return True
+    if AUTH_SESSION_COOKIE_SECURE_SETTING in {"0", "false", "no", "off"}:
+        return False
+    return bool(request.is_secure)
+
+
+def set_auth_session_cookie(resp, session_id: str) -> None:
+    resp.set_cookie(
+        AUTH_SESSION_COOKIE_NAME,
+        session_id,
+        max_age=AUTH_SESSION_TTL_SECONDS,
+        httponly=True,
+        samesite="Lax",
+        secure=should_use_secure_auth_cookie(),
+        path="/",
+    )
+
+
+def clear_auth_session_cookie(resp) -> None:
+    resp.delete_cookie(
+        AUTH_SESSION_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite="Lax",
+        secure=should_use_secure_auth_cookie(),
+    )
 
 
 def get_json_body() -> dict[str, Any]:
@@ -396,6 +480,24 @@ def parse_bool_value(value: Any, default: bool = False) -> bool:
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def send_borrow_approval_email(data: dict[str, Any]) -> tuple[bool, str | None]:
+    email = normalize_email(str(data.get("email", "") or ""))
+    if not email:
+        return False, "The member does not have an email address on file."
+
+    if deliver_issue_approval_email is None:
+        return False, "Email delivery helper is unavailable."
+
+    payload = {**data, "email": email}
+    try:
+        if deliver_issue_approval_email(email, payload):
+            return True, None
+    except Exception as exc:
+        return False, str(exc)
+
+    return False, "SMTP delivery failed."
 
 
 def normalize_email(email: str) -> str:
@@ -895,6 +997,149 @@ def ensure_database_features() -> None:
 
             conn.execute(
                 """
+                CREATE TABLE IF NOT EXISTS waitlist_entries (
+                    waitlist_entry_id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    member_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                    book_id BIGINT NOT NULL REFERENCES books(book_id) ON DELETE RESTRICT,
+                    status TEXT NOT NULL DEFAULT 'waiting',
+                    position INTEGER,
+                    notified_at TIMESTAMPTZ,
+                    fulfilled_at TIMESTAMPTZ,
+                    cancelled_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CONSTRAINT waitlist_entries_status_check CHECK (
+                        status IN ('waiting', 'notified', 'fulfilled', 'cancelled')
+                    ),
+                    CONSTRAINT waitlist_entries_position_check CHECK (
+                        position IS NULL OR position > 0
+                    ),
+                    CONSTRAINT waitlist_entries_notified_at_check CHECK (
+                        (status IN ('notified', 'fulfilled') AND notified_at IS NOT NULL)
+                        OR status NOT IN ('notified', 'fulfilled')
+                    ),
+                    CONSTRAINT waitlist_entries_fulfilled_at_check CHECK (
+                        (status = 'fulfilled' AND fulfilled_at IS NOT NULL)
+                        OR status <> 'fulfilled'
+                    ),
+                    CONSTRAINT waitlist_entries_cancelled_at_check CHECK (
+                        (status = 'cancelled' AND cancelled_at IS NOT NULL)
+                        OR status <> 'cancelled'
+                    )
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS waitlist_entries_one_waiting_per_member_book_uidx
+                ON waitlist_entries (member_id, book_id)
+                WHERE status = 'waiting'
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS waitlist_entries_book_status_created_idx
+                ON waitlist_entries (book_id, status, created_at)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS waitlist_entries_member_idx
+                ON waitlist_entries (member_id, created_at DESC)
+                """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS favorite_books (
+                    favorite_id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    member_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    book_id BIGINT NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CONSTRAINT favorite_books_unique_member_book UNIQUE (member_id, book_id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS favorite_books_member_idx
+                ON favorite_books (member_id, created_at DESC)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS favorite_books_book_idx
+                ON favorite_books (book_id, created_at DESC)
+                """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS book_reviews (
+                    review_id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    member_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    book_id BIGINT NOT NULL REFERENCES books(book_id) ON DELETE CASCADE,
+                    rating SMALLINT NOT NULL,
+                    review_text TEXT NOT NULL DEFAULT '',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CONSTRAINT book_reviews_rating_check CHECK (rating BETWEEN 1 AND 5),
+                    CONSTRAINT book_reviews_unique_member_book UNIQUE (member_id, book_id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS book_reviews_book_idx
+                ON book_reviews (book_id, updated_at DESC)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS book_reviews_member_idx
+                ON book_reviews (member_id, updated_at DESC)
+                """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS notifications (
+                    notification_id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                    category TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    link_path TEXT,
+                    book_id BIGINT REFERENCES books(book_id) ON DELETE SET NULL,
+                    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+                    read_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CONSTRAINT notifications_category_not_blank CHECK (BTRIM(category) <> ''),
+                    CONSTRAINT notifications_title_not_blank CHECK (BTRIM(title) <> ''),
+                    CONSTRAINT notifications_message_not_blank CHECK (BTRIM(message) <> ''),
+                    CONSTRAINT notifications_read_state_check CHECK (
+                        (is_read = FALSE AND read_at IS NULL)
+                        OR (is_read = TRUE AND read_at IS NOT NULL)
+                    )
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS notifications_user_created_idx
+                ON notifications (user_id, created_at DESC)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS notifications_user_unread_idx
+                ON notifications (user_id, is_read, created_at DESC)
+                """
+            )
+
+            conn.execute(
+                """
                 DO $$
                 BEGIN
                     IF NOT EXISTS (
@@ -938,6 +1183,57 @@ def ensure_database_features() -> None:
                     ) THEN
                         CREATE TRIGGER slot_bookings_set_updated_at
                         BEFORE UPDATE ON slot_bookings
+                        FOR EACH ROW
+                        EXECUTE FUNCTION set_updated_at();
+                    END IF;
+                END $$;
+                """
+            )
+            conn.execute(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_trigger
+                        WHERE tgname = 'waitlist_entries_set_updated_at'
+                    ) THEN
+                        CREATE TRIGGER waitlist_entries_set_updated_at
+                        BEFORE UPDATE ON waitlist_entries
+                        FOR EACH ROW
+                        EXECUTE FUNCTION set_updated_at();
+                    END IF;
+                END $$;
+                """
+            )
+            conn.execute(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_trigger
+                        WHERE tgname = 'book_reviews_set_updated_at'
+                    ) THEN
+                        CREATE TRIGGER book_reviews_set_updated_at
+                        BEFORE UPDATE ON book_reviews
+                        FOR EACH ROW
+                        EXECUTE FUNCTION set_updated_at();
+                    END IF;
+                END $$;
+                """
+            )
+            conn.execute(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_trigger
+                        WHERE tgname = 'notifications_set_updated_at'
+                    ) THEN
+                        CREATE TRIGGER notifications_set_updated_at
+                        BEFORE UPDATE ON notifications
                         FOR EACH ROW
                         EXECUTE FUNCTION set_updated_at();
                     END IF;
@@ -991,6 +1287,160 @@ def count_reserved_slot_bookings(
     return int((row or {}).get("reserved_count", 0))
 
 
+def resequence_waitlist_positions(conn: psycopg.Connection[Any], book_id: int) -> None:
+    conn.execute(
+        """
+        WITH ordered AS (
+            SELECT
+                waitlist_entry_id,
+                ROW_NUMBER() OVER (ORDER BY created_at ASC, waitlist_entry_id ASC) AS next_position
+            FROM waitlist_entries
+            WHERE book_id = %s
+              AND status = 'waiting'
+        )
+        UPDATE waitlist_entries AS w
+        SET position = ordered.next_position
+        FROM ordered
+        WHERE w.waitlist_entry_id = ordered.waitlist_entry_id
+        """,
+        (book_id,),
+    )
+
+
+def create_notification(
+    conn: psycopg.Connection[Any],
+    user_id: int,
+    category: str,
+    title: str,
+    message: str,
+    *,
+    link_path: str | None = None,
+    book_id: int | None = None,
+) -> dict[str, Any]:
+    return conn.execute(
+        """
+        INSERT INTO notifications (
+            user_id,
+            category,
+            title,
+            message,
+            link_path,
+            book_id
+        )
+        VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING
+            notification_id,
+            user_id,
+            category,
+            title,
+            message,
+            link_path,
+            book_id,
+            is_read,
+            read_at,
+            created_at,
+            updated_at
+        """,
+        (user_id, category, title, message, link_path, book_id),
+    ).fetchone()
+
+
+def notify_next_waiting_member_if_available(
+    conn: psycopg.Connection[Any],
+    book_id: int,
+) -> dict[str, Any] | None:
+    book = conn.execute(
+        """
+        SELECT
+            b.book_id,
+            b.available_copies,
+            b.title,
+            l.name AS library_name
+        FROM books b
+        JOIN libraries l ON l.library_id = b.library_id
+        WHERE b.book_id = %s
+        FOR UPDATE
+        """,
+        (book_id,),
+    ).fetchone()
+    if book is None or int(book["available_copies"] or 0) < 1:
+        return None
+
+    already_notified = conn.execute(
+        """
+        SELECT waitlist_entry_id
+        FROM waitlist_entries
+        WHERE book_id = %s
+          AND status = 'notified'
+        LIMIT 1
+        """,
+        (book_id,),
+    ).fetchone()
+    if already_notified is not None:
+        return None
+
+    entry = conn.execute(
+        """
+        SELECT
+            waitlist_entry_id,
+            member_id,
+            position
+        FROM waitlist_entries
+        WHERE book_id = %s
+          AND status = 'waiting'
+        ORDER BY created_at ASC, waitlist_entry_id ASC
+        LIMIT 1
+        FOR UPDATE
+        """,
+        (book_id,),
+    ).fetchone()
+    if entry is None:
+        return None
+
+    notified_at = utc_now()
+    conn.execute(
+        """
+        UPDATE waitlist_entries
+        SET
+            status = 'notified',
+            notified_at = %s
+        WHERE waitlist_entry_id = %s
+        """,
+        (notified_at, entry["waitlist_entry_id"]),
+    )
+    resequence_waitlist_positions(conn, book_id)
+    create_notification(
+        conn,
+        int(entry["member_id"]),
+        "waitlist",
+        "Book now available",
+        (
+            f"{book['title']} at {book['library_name']} now has an available copy. "
+            "Request the book soon before the next person in line is notified."
+        ),
+        link_path="user-waitlist-screen",
+        book_id=int(book_id),
+    )
+    return conn.execute(
+        """
+        SELECT
+            waitlist_entry_id,
+            member_id,
+            book_id,
+            status,
+            position,
+            notified_at,
+            fulfilled_at,
+            cancelled_at,
+            created_at,
+            updated_at
+        FROM waitlist_entries
+        WHERE waitlist_entry_id = %s
+        """,
+        (entry["waitlist_entry_id"],),
+    ).fetchone()
+
+
 def ensure_book_can_be_fulfilled(
     conn: psycopg.Connection[Any],
     book: dict[str, Any] | None,
@@ -1033,7 +1483,7 @@ def fetch_public_user(conn: psycopg.Connection[Any], user_id: int) -> dict[str, 
 
 def fetch_book(conn: psycopg.Connection[Any], book_id: int) -> dict[str, Any] | None:
     row = conn.execute(
-        """
+        f"""
         SELECT
             b.book_id,
             b.library_id,
@@ -1052,9 +1502,11 @@ def fetch_book(conn: psycopg.Connection[Any], book_id: int) -> dict[str, Any] | 
             l.name AS library_name,
             l.city AS library_city,
             l.state AS library_state,
-            l.is_active AS library_is_active
+            l.is_active AS library_is_active,
+{BOOK_STATS_SELECT_SQL}
         FROM books b
         JOIN libraries l ON l.library_id = b.library_id
+{BOOK_STATS_JOIN_SQL}
         WHERE b.book_id = %s
         """,
         (book_id,),
@@ -1135,7 +1587,7 @@ def fetch_catalog_snapshot(conn: psycopg.Connection[Any]) -> dict[str, Any]:
     ).fetchall()
 
     books = conn.execute(
-        """
+        f"""
         SELECT
             b.book_id,
             b.library_id,
@@ -1154,9 +1606,11 @@ def fetch_catalog_snapshot(conn: psycopg.Connection[Any]) -> dict[str, Any]:
             l.name AS library_name,
             l.city AS library_city,
             l.state AS library_state,
-            l.is_active AS library_is_active
+            l.is_active AS library_is_active,
+{BOOK_STATS_SELECT_SQL}
         FROM books b
         JOIN libraries l ON l.library_id = b.library_id
+{BOOK_STATS_JOIN_SQL}
         WHERE l.is_active = TRUE
         ORDER BY b.title ASC, b.book_id ASC
         """
@@ -1293,11 +1747,102 @@ def fetch_user_dashboard_snapshot(conn: psycopg.Connection[Any], user_id: int) -
         (user_id,),
     ).fetchall()
 
+    favorites = conn.execute(
+        """
+        SELECT
+            f.favorite_id,
+            f.member_id,
+            f.book_id,
+            f.created_at,
+            b.title AS book_title,
+            b.author AS book_author,
+            l.library_id,
+            l.name AS library_name
+        FROM favorite_books f
+        JOIN books b ON b.book_id = f.book_id
+        JOIN libraries l ON l.library_id = b.library_id
+        WHERE f.member_id = %s
+        ORDER BY f.created_at DESC
+        """,
+        (user_id,),
+    ).fetchall()
+
+    waitlist_entries = conn.execute(
+        """
+        SELECT
+            w.waitlist_entry_id,
+            w.member_id,
+            w.book_id,
+            w.status,
+            w.position,
+            w.notified_at,
+            w.fulfilled_at,
+            w.cancelled_at,
+            w.created_at,
+            w.updated_at,
+            b.title AS book_title,
+            b.author AS book_author,
+            l.library_id,
+            l.name AS library_name
+        FROM waitlist_entries w
+        JOIN books b ON b.book_id = w.book_id
+        JOIN libraries l ON l.library_id = b.library_id
+        WHERE w.member_id = %s
+        ORDER BY w.created_at DESC
+        """,
+        (user_id,),
+    ).fetchall()
+
+    notifications = conn.execute(
+        """
+        SELECT
+            n.notification_id,
+            n.user_id,
+            n.category,
+            n.title,
+            n.message,
+            n.link_path,
+            n.book_id,
+            n.is_read,
+            n.read_at,
+            n.created_at,
+            n.updated_at,
+            b.title AS book_title,
+            l.name AS library_name
+        FROM notifications n
+        LEFT JOIN books b ON b.book_id = n.book_id
+        LEFT JOIN libraries l ON l.library_id = b.library_id
+        WHERE n.user_id = %s
+        ORDER BY n.created_at DESC
+        LIMIT 60
+        """,
+        (user_id,),
+    ).fetchall()
+
+    metrics = conn.execute(
+        f"""
+        SELECT
+            (SELECT COUNT(*) FROM notifications WHERE user_id = %s AND is_read = FALSE) AS unread_notification_count,
+            (SELECT COUNT(*) FROM favorite_books WHERE member_id = %s) AS favorites_count,
+            (
+                SELECT COUNT(*)
+                FROM waitlist_entries
+                WHERE member_id = %s
+                  AND status IN {WAITLIST_ACTIVE_STATUS_SQL}
+            ) AS active_waitlist_count
+        """,
+        (user_id, user_id, user_id),
+    ).fetchone()
+
     return {
         "borrow_requests": borrow_requests,
         "purchase_requests": purchase_requests,
         "loans": loans,
         "slot_bookings": slot_bookings,
+        "favorites": favorites,
+        "waitlist_entries": waitlist_entries,
+        "notifications": notifications,
+        "metrics": metrics,
     }
 
 
@@ -1437,13 +1982,201 @@ def fetch_admin_dashboard_snapshot(
         (library_id,),
     ).fetchall()
 
+    analytics = conn.execute(
+        f"""
+        SELECT
+            (SELECT COUNT(*) FROM books WHERE library_id = %s) AS total_books,
+            (SELECT COALESCE(SUM(available_copies), 0) FROM books WHERE library_id = %s) AS available_issue_copies,
+            (
+                SELECT COUNT(*)
+                FROM book_loans bl
+                JOIN books b ON b.book_id = bl.book_id
+                WHERE b.library_id = %s
+                  AND bl.returned_at IS NULL
+            ) AS active_loans,
+            (
+                SELECT COUNT(*)
+                FROM borrow_requests br
+                JOIN books b ON b.book_id = br.book_id
+                WHERE b.library_id = %s
+                  AND br.status = 'pending'
+            ) AS pending_borrow_requests,
+            (
+                SELECT COUNT(*)
+                FROM purchase_requests pr
+                JOIN books b ON b.book_id = pr.book_id
+                WHERE b.library_id = %s
+                  AND pr.status = 'pending'
+            ) AS pending_purchase_requests,
+            (
+                SELECT COUNT(*)
+                FROM slot_bookings sb
+                JOIN books b ON b.book_id = sb.book_id
+                WHERE b.library_id = %s
+                  AND sb.status = 'pending'
+            ) AS pending_slot_requests,
+            (
+                SELECT COUNT(*)
+                FROM waitlist_entries w
+                JOIN books b ON b.book_id = w.book_id
+                WHERE b.library_id = %s
+                  AND w.status IN {WAITLIST_ACTIVE_STATUS_SQL}
+            ) AS active_waitlist_entries,
+            (
+                SELECT COALESCE(ROUND(AVG(r.rating)::numeric, 2), 0)
+                FROM book_reviews r
+                JOIN books b ON b.book_id = r.book_id
+                WHERE b.library_id = %s
+            ) AS average_rating,
+            (
+                SELECT COUNT(*)
+                FROM book_reviews r
+                JOIN books b ON b.book_id = r.book_id
+                WHERE b.library_id = %s
+            ) AS review_count
+        """,
+        (
+            library_id,
+            library_id,
+            library_id,
+            library_id,
+            library_id,
+            library_id,
+            library_id,
+            library_id,
+            library_id,
+        ),
+    ).fetchone()
+
+    top_books = conn.execute(
+        """
+        SELECT
+            b.book_id,
+            b.title,
+            b.author,
+            COALESCE(loan_stats.loan_count, 0) AS loan_count,
+            COALESCE(request_stats.pending_borrow_requests, 0) AS pending_borrow_requests,
+            COALESCE(waitlist_stats.waitlist_count, 0) AS waitlist_count,
+            COALESCE(review_stats.review_count, 0) AS review_count,
+            COALESCE(review_stats.average_rating, 0) AS average_rating
+        FROM books b
+        LEFT JOIN (
+            SELECT book_id, COUNT(*) AS loan_count
+            FROM book_loans
+            GROUP BY book_id
+        ) AS loan_stats ON loan_stats.book_id = b.book_id
+        LEFT JOIN (
+            SELECT book_id, COUNT(*) AS pending_borrow_requests
+            FROM borrow_requests
+            WHERE status = 'pending'
+            GROUP BY book_id
+        ) AS request_stats ON request_stats.book_id = b.book_id
+        LEFT JOIN (
+            SELECT book_id, COUNT(*) AS waitlist_count
+            FROM waitlist_entries
+            WHERE status IN ('waiting', 'notified')
+            GROUP BY book_id
+        ) AS waitlist_stats ON waitlist_stats.book_id = b.book_id
+        LEFT JOIN (
+            SELECT
+                book_id,
+                COUNT(*) AS review_count,
+                ROUND(AVG(rating)::numeric, 2) AS average_rating
+            FROM book_reviews
+            GROUP BY book_id
+        ) AS review_stats ON review_stats.book_id = b.book_id
+        WHERE b.library_id = %s
+        ORDER BY
+            COALESCE(waitlist_stats.waitlist_count, 0) DESC,
+            COALESCE(loan_stats.loan_count, 0) DESC,
+            COALESCE(request_stats.pending_borrow_requests, 0) DESC,
+            COALESCE(review_stats.review_count, 0) DESC,
+            b.title ASC
+        LIMIT 6
+        """,
+        (library_id,),
+    ).fetchall()
+
+    recent_reviews = conn.execute(
+        """
+        SELECT
+            r.review_id,
+            r.member_id,
+            r.book_id,
+            r.rating,
+            r.review_text,
+            r.created_at,
+            r.updated_at,
+            b.title AS book_title,
+            b.author AS book_author,
+            u.full_name AS member_name,
+            u.email AS member_email
+        FROM book_reviews r
+        JOIN books b ON b.book_id = r.book_id
+        JOIN users u ON u.user_id = r.member_id
+        WHERE b.library_id = %s
+        ORDER BY r.updated_at DESC, r.review_id DESC
+        LIMIT 8
+        """,
+        (library_id,),
+    ).fetchall()
+
     return {
         "library": library,
         "borrow_requests": borrow_requests,
         "purchase_requests": purchase_requests,
         "loans": loans,
         "slot_bookings": slot_bookings,
+        "analytics": analytics,
+        "top_books": top_books,
+        "recent_reviews": recent_reviews,
     }
+
+
+def get_auth_session_id_from_request() -> str | None:
+    session_id = request.cookies.get(AUTH_SESSION_COOKIE_NAME, "").strip()
+    return session_id or None
+
+
+def generate_auth_session_id() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def fetch_public_user_by_session(
+    conn: psycopg.Connection[Any],
+    session_id: str | None,
+) -> dict[str, Any] | None:
+    if not session_id:
+        return None
+    return conn.execute(
+        """
+        SELECT
+            u.user_id,
+            u.role,
+            u.full_name,
+            u.email,
+            u.legacy_source,
+            u.legacy_source_id,
+            u.managed_library_id,
+            u.email_verified_at,
+            u.must_reset_password,
+            u.is_active,
+            u.last_login_at,
+            u.created_at,
+            u.updated_at,
+            l.code AS managed_library_code,
+            l.name AS managed_library_name
+        FROM user_sessions us
+        JOIN users u ON u.user_id = us.user_id
+        LEFT JOIN libraries l ON l.library_id = u.managed_library_id
+        WHERE us.session_id = %s
+          AND us.logged_out_at IS NULL
+          AND us.last_seen_at >= NOW() - (%s * INTERVAL '1 second')
+          AND u.is_active = TRUE
+        LIMIT 1
+        """,
+        (session_id, AUTH_SESSION_TTL_SECONDS),
+    ).fetchone()
 
 
 def get_request_actor_context() -> tuple[str | None, int | str | None, str | None, str | None]:
@@ -1467,7 +2200,12 @@ def get_request_actor_context() -> tuple[str | None, int | str | None, str | Non
         if actor_email in (None, ""):
             actor_email = payload.get("email")
 
-    session_id = request.headers.get("X-Smart-Library-Session", "").strip() or None
+    session_id = (
+        getattr(g, "auth_session_id", None)
+        or get_auth_session_id_from_request()
+        or request.headers.get("X-Smart-Library-Session", "").strip()
+        or None
+    )
     normalized_role = str(actor_role or "").strip().lower() or None
     normalized_email = normalize_email(str(actor_email or "")) if actor_email not in (None, "") else None
     return session_id, get_actor_id(actor_id), normalized_role, normalized_email
@@ -1661,16 +2399,20 @@ def capture_request_metadata():
     g.audit_timestamp = utc_now()
     g.audit_payload = None
     g.audit_actor = {}
+    g.auth_session_id = get_auth_session_id_from_request()
 
 
 @app.after_request
 def add_cors_headers(resp):
-    resp.headers["Access-Control-Allow-Origin"] = "*"
+    origin = request.headers.get("Origin", "").strip()
+    resp.headers["Access-Control-Allow-Origin"] = origin or "*"
     resp.headers["Access-Control-Allow-Headers"] = (
         "Content-Type, Authorization, X-Smart-Library-Session, "
         "X-Smart-Library-Actor-Id, X-Smart-Library-Actor-Role, X-Smart-Library-Actor-Email"
     )
     resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    resp.headers["Access-Control-Allow-Credentials"] = "true"
+    resp.headers["Vary"] = "Origin"
     try:
         sync_user_session_activity(resp)
     except Exception as exc:
@@ -1814,9 +2556,11 @@ def list_books():
                 l.name AS library_name,
                 l.city AS library_city,
                 l.state AS library_state,
-                l.is_active AS library_is_active
+                l.is_active AS library_is_active,
+{BOOK_STATS_SELECT_SQL}
             FROM books b
             JOIN libraries l ON l.library_id = b.library_id
+{BOOK_STATS_JOIN_SQL}
             {where_sql}
             ORDER BY b.title ASC, b.book_id ASC
             LIMIT %s OFFSET %s
@@ -2157,8 +2901,26 @@ def register_user():
     except ForeignKeyViolation as exc:
         raise ApiError("managed_library_id does not exist.", 404) from exc
 
+    session_id = generate_auth_session_id()
+    g.auth_session_id = session_id
     set_audit_actor(created)
-    return success(created, 201)
+    resp = success(created, 201)
+    set_auth_session_cookie(resp, session_id)
+    return resp
+
+
+@app.get("/api/auth/session")
+def get_auth_session():
+    with get_db_connection() as conn:
+        user = fetch_public_user_by_session(conn, get_auth_session_id_from_request())
+
+    if user is None:
+        resp = response({"ok": False, "error": "No active session."}, 401)
+        clear_auth_session_cookie(resp)
+        return resp
+
+    set_audit_actor(user)
+    return success(user)
 
 
 @app.post("/api/auth/login")
@@ -2204,8 +2966,12 @@ def login_user():
         )
         refreshed = fetch_public_user(conn, user["user_id"])
 
+    session_id = generate_auth_session_id()
+    g.auth_session_id = session_id
     set_audit_actor(refreshed)
-    return success(refreshed)
+    resp = success(refreshed)
+    set_auth_session_cookie(resp, session_id)
+    return resp
 
 
 @app.post("/api/auth/password-reset")
@@ -2245,7 +3011,25 @@ def reset_password():
 
 @app.post("/api/auth/logout")
 def logout_user():
-    return success({"logged_out": True})
+    session_id = get_auth_session_id_from_request()
+    if session_id:
+        with get_db_connection() as conn:
+            user = fetch_public_user_by_session(conn, session_id)
+            if user is not None:
+                set_audit_actor(user)
+            conn.execute(
+                """
+                UPDATE user_sessions
+                SET logged_out_at = %s
+                WHERE session_id = %s
+                  AND logged_out_at IS NULL
+                """,
+                (utc_now(), session_id),
+            )
+
+    resp = success({"logged_out": True})
+    clear_auth_session_cookie(resp)
+    return resp
 
 
 @app.post("/api/loans")
@@ -2370,8 +3154,33 @@ def issue_loan():
                 """,
                 (book_id,),
             )
+            conn.execute(
+                f"""
+                UPDATE waitlist_entries
+                SET
+                    status = 'fulfilled',
+                    fulfilled_at = %s
+                WHERE member_id = %s
+                  AND book_id = %s
+                  AND status IN {WAITLIST_ACTIVE_STATUS_SQL}
+                """,
+                (utc_now(), member_id, book_id),
+            )
+            resequence_waitlist_positions(conn, book_id)
 
             created = fetch_loan(conn, loan_row["loan_id"])
+            create_notification(
+                conn,
+                member_id,
+                "loan",
+                "Book issued successfully",
+                (
+                    f"{created['book_title']} has been issued to your account from "
+                    f"{created['library_name']}. Due date: {created['due_at'].date().isoformat()}."
+                ),
+                link_path="user-issued-screen",
+                book_id=book_id,
+            )
     except UniqueViolation as exc:
         raise ApiError("A duplicate active loan already exists.", 409) from exc
     except ForeignKeyViolation as exc:
@@ -2433,7 +3242,7 @@ def return_loan(loan_id: int):
     with get_db_connection() as conn:
         loan = conn.execute(
             """
-            SELECT loan_id, book_id, returned_at
+            SELECT loan_id, member_id, book_id, returned_at
             FROM book_loans
             WHERE loan_id = %s
             FOR UPDATE
@@ -2462,6 +3271,19 @@ def return_loan(loan_id: int):
             (loan["book_id"],),
         )
         updated = fetch_loan(conn, loan_id)
+        create_notification(
+            conn,
+            int(loan["member_id"]),
+            "loan",
+            "Book returned",
+            (
+                f"{updated['book_title']} has been marked as returned."
+                + (f" Fine recorded: Rs {float(fine_amount):.2f}." if fine_amount else "")
+            ),
+            link_path="user-issued-screen",
+            book_id=int(loan["book_id"]),
+        )
+        notify_next_waiting_member_if_available(conn, int(loan["book_id"]))
 
     invalidate_all_caches()
     return success(updated)
@@ -2513,6 +3335,17 @@ def create_borrow_request():
                 """,
                 (member_id, book_id),
             ).fetchone()
+            book_details = fetch_book(conn, book_id)
+            if book_details is not None:
+                create_notification(
+                    conn,
+                    member_id,
+                    "borrow_request",
+                    "Borrow request submitted",
+                    f"Your request for {book_details['title']} has been sent to the library admin.",
+                    link_path="user-issue-requests-screen",
+                    book_id=book_id,
+                )
     except UniqueViolation as exc:
         raise ApiError("A pending request already exists for this member and book.", 409) from exc
 
@@ -2617,6 +3450,15 @@ def cancel_borrow_request(borrow_request_id: int):
             """,
             (borrow_request_id,),
         ).fetchone()
+        create_notification(
+            conn,
+            member_id,
+            "borrow_request",
+            "Borrow request cancelled",
+            f"Your borrow request for book #{updated_request['book_id']} has been cancelled.",
+            link_path="user-issue-requests-screen",
+            book_id=int(updated_request["book_id"]),
+        )
 
     invalidate_dashboard_cache()
     return success(updated_request)
@@ -2673,6 +3515,17 @@ def create_purchase_request():
                 """,
                 (member_id, book_id, book["purchase_price"]),
             ).fetchone()
+            book_details = fetch_book(conn, book_id)
+            if book_details is not None:
+                create_notification(
+                    conn,
+                    member_id,
+                    "purchase_request",
+                    "Purchase request submitted",
+                    f"Your purchase request for {book_details['title']} has been sent to the library admin.",
+                    link_path="user-purchase-requests-screen",
+                    book_id=book_id,
+                )
     except UniqueViolation as exc:
         raise ApiError("A pending purchase request already exists for this member and book.", 409) from exc
 
@@ -2765,6 +3618,15 @@ def cancel_purchase_request(purchase_request_id: int):
             """,
             (purchase_request_id,),
         ).fetchone()
+        create_notification(
+            conn,
+            member_id,
+            "purchase_request",
+            "Purchase request cancelled",
+            f"Your purchase request for book #{updated['book_id']} has been cancelled.",
+            link_path="user-purchase-requests-screen",
+            book_id=int(updated["book_id"]),
+        )
 
     invalidate_dashboard_cache()
     return success(updated)
@@ -2901,6 +3763,18 @@ def review_purchase_request(purchase_request_id: int):
             """,
             (purchase_request_id,),
         ).fetchone()
+        create_notification(
+            conn,
+            int(purchase_request["member_id"]),
+            "purchase_request",
+            "Purchase request reviewed",
+            (
+                f"Your purchase request for book #{purchase_request['book_id']} was {action}."
+                + (f" Reason: {rejection_reason}." if rejection_reason else "")
+            ),
+            link_path="user-purchase-requests-screen",
+            book_id=int(purchase_request["book_id"]),
+        )
 
     invalidate_dashboard_cache()
     return success(updated)
@@ -2991,6 +3865,7 @@ def review_borrow_request(borrow_request_id: int):
     payload = get_json_body()
     reviewer_user_id = parse_int(payload.get("reviewer_user_id"), "reviewer_user_id", minimum=1)
     action = require_text(payload, "action").lower()
+    approval_email_payload: dict[str, Any] | None = None
 
     if action not in {"approved", "rejected"}:
         raise ApiError("action must be either 'approved' or 'rejected'.", 400)
@@ -3054,6 +3929,15 @@ def review_borrow_request(borrow_request_id: int):
                 """,
                 (borrow_request_id,),
             ).fetchone()
+            create_notification(
+                conn,
+                int(borrow_request["member_id"]),
+                "borrow_request",
+                "Borrow request rejected",
+                f"Your borrow request for book #{borrow_request['book_id']} was rejected. Reason: {rejection_reason}.",
+                link_path="user-issue-requests-screen",
+                book_id=int(borrow_request["book_id"]),
+            )
             invalidate_dashboard_cache()
             return success(updated_request)
 
@@ -3125,6 +4009,23 @@ def review_borrow_request(borrow_request_id: int):
             """,
             (borrow_request["book_id"],),
         )
+        conn.execute(
+            f"""
+            UPDATE waitlist_entries
+            SET
+                status = 'fulfilled',
+                fulfilled_at = %s
+            WHERE member_id = %s
+              AND book_id = %s
+              AND status IN {WAITLIST_ACTIVE_STATUS_SQL}
+            """,
+            (
+                utc_now(),
+                borrow_request["member_id"],
+                borrow_request["book_id"],
+            ),
+        )
+        resequence_waitlist_positions(conn, int(borrow_request["book_id"]))
 
         updated_request = conn.execute(
             """
@@ -3145,9 +4046,50 @@ def review_borrow_request(borrow_request_id: int):
             (borrow_request_id,),
         ).fetchone()
         created_loan = fetch_loan(conn, loan_row["loan_id"])
+        member = conn.execute(
+            """
+            SELECT full_name, email
+            FROM users
+            WHERE user_id = %s
+            """,
+            (borrow_request["member_id"],),
+        ).fetchone()
+        approval_email_payload = {
+            "email": str(member["email"] if member else "").strip(),
+            "user_name": str(
+                member["full_name"] if member and member["full_name"] else f"Student #{borrow_request['member_id']}"
+            ).strip(),
+            "book_title": str(created_loan["book_title"] or f"Book #{borrow_request['book_id']}").strip(),
+            "library": str(created_loan["library_name"] or "").strip(),
+            "book_id": str(borrow_request["book_id"]).strip(),
+            "issue_date": created_loan["issued_at"].date().isoformat(),
+            "due_date": created_loan["due_at"].date().isoformat(),
+        }
+        create_notification(
+            conn,
+            int(borrow_request["member_id"]),
+            "borrow_request",
+            "Borrow request approved",
+            (
+                f"Your request for {created_loan['book_title']} was approved. "
+                f"Due date: {created_loan['due_at'].date().isoformat()}."
+            ),
+            link_path="user-issued-screen",
+            book_id=int(borrow_request["book_id"]),
+        )
 
     invalidate_all_caches()
-    return success({"borrow_request": updated_request, "loan": created_loan})
+    approval_email_sent = False
+    approval_email_error = None
+    if approval_email_payload is not None:
+        approval_email_sent, approval_email_error = send_borrow_approval_email(approval_email_payload)
+
+    return success({
+        "borrow_request": updated_request,
+        "loan": created_loan,
+        "approval_email_sent": approval_email_sent,
+        "approval_email_error": approval_email_error,
+    })
 
 
 @app.get("/api/visit-slots")
@@ -3248,6 +4190,15 @@ def create_slot_booking():
                 """,
                 (member_id, book_id, slot_id, slot_date),
             ).fetchone()
+            create_notification(
+                conn,
+                member_id,
+                "slot_booking",
+                "Slot booking request submitted",
+                f"Your visit slot request for book #{book_id} on {slot_date.isoformat()} has been submitted.",
+                link_path="user-slot-bookings-screen",
+                book_id=book_id,
+            )
     except UniqueViolation as exc:
         raise ApiError("This member already has a pending or approved slot booking for the book.", 409) from exc
 
@@ -3394,6 +4345,15 @@ def cancel_slot_booking(slot_booking_id: int):
             """,
             (slot_booking_id,),
         ).fetchone()
+        create_notification(
+            conn,
+            member_id,
+            "slot_booking",
+            "Slot booking cancelled",
+            f"Your slot booking for book #{updated['book_id']} has been cancelled.",
+            link_path="user-slot-bookings-screen",
+            book_id=int(updated["book_id"]),
+        )
 
     invalidate_dashboard_cache()
     return success(updated)
@@ -3513,6 +4473,18 @@ def review_slot_booking(slot_booking_id: int):
             """,
             (slot_booking_id,),
         ).fetchone()
+        create_notification(
+            conn,
+            int(booking["member_id"]),
+            "slot_booking",
+            f"Slot booking {action}",
+            (
+                f"Your slot booking for book #{booking['book_id']} on {booking['slot_date'].isoformat()} was {action}."
+                + (f" Reason: {rejection_reason}." if rejection_reason else "")
+            ),
+            link_path="user-approved-slots-screen" if action == "approved" else "user-slot-bookings-screen",
+            book_id=int(booking["book_id"]),
+        )
 
     invalidate_dashboard_cache()
     return success(updated)
@@ -3587,11 +4559,40 @@ def create_waitlist_entry():
                 raise ApiError("This member account is inactive.", 403)
 
             book = conn.execute(
-                "SELECT book_id FROM books WHERE book_id = %s",
+                """
+                SELECT
+                    b.book_id,
+                    b.available_copies,
+                    b.title,
+                    l.name AS library_name
+                FROM books b
+                JOIN libraries l ON l.library_id = b.library_id
+                WHERE b.book_id = %s
+                FOR UPDATE
+                """,
                 (book_id,),
             ).fetchone()
             if book is None:
                 raise ApiError("Book not found.", 404)
+            if int(book["available_copies"] or 0) > 0:
+                raise ApiError(
+                    "This book is currently available. Request the book directly instead of joining the waitlist.",
+                    409,
+                )
+
+            existing_active = conn.execute(
+                f"""
+                SELECT waitlist_entry_id
+                FROM waitlist_entries
+                WHERE member_id = %s
+                  AND book_id = %s
+                  AND status IN {WAITLIST_ACTIVE_STATUS_SQL}
+                LIMIT 1
+                """,
+                (member_id, book_id),
+            ).fetchone()
+            if existing_active is not None:
+                raise ApiError("This member is already in the active waitlist for the selected book.", 409)
 
             last_position = conn.execute(
                 """
@@ -3623,9 +4624,22 @@ def create_waitlist_entry():
                 """,
                 (member_id, book_id, next_position),
             ).fetchone()
+            create_notification(
+                conn,
+                member_id,
+                "waitlist",
+                "Joined waitlist",
+                (
+                    f"You joined the waitlist for {book['title']} at {book['library_name']}."
+                    f" Current position: {created['position']}."
+                ),
+                link_path="user-waitlist-screen",
+                book_id=book_id,
+            )
     except UniqueViolation as exc:
         raise ApiError("This member is already waiting for the selected book.", 409) from exc
 
+    invalidate_all_caches()
     return success(created, 201)
 
 
@@ -3666,10 +4680,13 @@ def list_user_waitlist(user_id: int):
 
 @app.post("/api/waitlist/<int:waitlist_entry_id>/cancel")
 def cancel_waitlist_entry(waitlist_entry_id: int):
+    payload = get_json_body()
+    member_id = parse_int(payload.get("member_id"), "member_id", minimum=1)
+
     with get_db_connection() as conn:
         entry = conn.execute(
             """
-            SELECT waitlist_entry_id, status
+            SELECT waitlist_entry_id, member_id, book_id, status
             FROM waitlist_entries
             WHERE waitlist_entry_id = %s
             FOR UPDATE
@@ -3678,6 +4695,8 @@ def cancel_waitlist_entry(waitlist_entry_id: int):
         ).fetchone()
         if entry is None:
             raise ApiError("Waitlist entry not found.", 404)
+        if int(entry["member_id"]) != member_id:
+            raise ApiError("This waitlist entry does not belong to the provided member.", 403)
         if entry["status"] != "waiting":
             raise ApiError("Only waiting entries can be cancelled.", 409)
 
@@ -3689,6 +4708,7 @@ def cancel_waitlist_entry(waitlist_entry_id: int):
             """,
             (utc_now(), waitlist_entry_id),
         )
+        resequence_waitlist_positions(conn, int(entry["book_id"]))
         updated = conn.execute(
             """
             SELECT
@@ -3707,8 +4727,363 @@ def cancel_waitlist_entry(waitlist_entry_id: int):
             """,
             (waitlist_entry_id,),
         ).fetchone()
+        create_notification(
+            conn,
+            member_id,
+            "waitlist",
+            "Waitlist entry cancelled",
+            f"Your waitlist entry for book #{entry['book_id']} has been cancelled.",
+            link_path="user-waitlist-screen",
+            book_id=int(entry["book_id"]),
+        )
 
+    invalidate_all_caches()
     return success(updated)
+
+
+@app.get("/api/users/<int:user_id>/favorites")
+def list_user_favorites(user_id: int):
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                f.favorite_id,
+                f.member_id,
+                f.book_id,
+                f.created_at,
+                b.title AS book_title,
+                b.author AS book_author,
+                l.library_id,
+                l.name AS library_name
+            FROM favorite_books f
+            JOIN books b ON b.book_id = f.book_id
+            JOIN libraries l ON l.library_id = b.library_id
+            WHERE f.member_id = %s
+            ORDER BY f.created_at DESC
+            """,
+            (user_id,),
+        ).fetchall()
+    return success(rows)
+
+
+@app.post("/api/favorites")
+def create_favorite():
+    payload = get_json_body()
+    member_id = parse_int(payload.get("member_id"), "member_id", minimum=1)
+    book_id = parse_int(payload.get("book_id"), "book_id", minimum=1)
+
+    try:
+        with get_db_connection() as conn:
+            member = conn.execute(
+                "SELECT user_id, role, is_active FROM users WHERE user_id = %s",
+                (member_id,),
+            ).fetchone()
+            if member is None or member["role"] != "member":
+                raise ApiError("member_id must belong to a member user.", 404)
+            if not member["is_active"]:
+                raise ApiError("This member account is inactive.", 403)
+
+            book = fetch_book(conn, book_id)
+            if book is None:
+                raise ApiError("Book not found.", 404)
+
+            created = conn.execute(
+                """
+                INSERT INTO favorite_books (member_id, book_id)
+                VALUES (%s, %s)
+                RETURNING favorite_id, member_id, book_id, created_at
+                """,
+                (member_id, book_id),
+            ).fetchone()
+    except UniqueViolation as exc:
+        raise ApiError("This book is already in the user's wishlist.", 409) from exc
+
+    invalidate_all_caches()
+    return success(created, 201)
+
+
+@app.post("/api/favorites/<int:favorite_id>/remove")
+def remove_favorite(favorite_id: int):
+    payload = get_json_body()
+    member_id = parse_int(payload.get("member_id"), "member_id", minimum=1)
+
+    with get_db_connection() as conn:
+        deleted = conn.execute(
+            """
+            DELETE FROM favorite_books
+            WHERE favorite_id = %s
+              AND member_id = %s
+            RETURNING favorite_id, member_id, book_id, created_at
+            """,
+            (favorite_id, member_id),
+        ).fetchone()
+    if deleted is None:
+        raise ApiError("Favorite not found.", 404)
+
+    invalidate_all_caches()
+    return success(deleted)
+
+
+@app.get("/api/books/<int:book_id>/reviews")
+def list_book_reviews(book_id: int):
+    limit = parse_int(request.args.get("limit", 20), "limit", minimum=1)
+    if limit > 100:
+        raise ApiError("limit cannot be greater than 100.", 400)
+    viewer_member_id_raw = request.args.get("member_id")
+    viewer_member_id = None
+    if viewer_member_id_raw not in (None, ""):
+        viewer_member_id = parse_int(viewer_member_id_raw, "member_id", minimum=1)
+
+    with get_db_connection() as conn:
+        book = fetch_book(conn, book_id)
+        if book is None:
+            raise ApiError("Book not found.", 404)
+        rows = conn.execute(
+            """
+            SELECT
+                r.review_id,
+                r.member_id,
+                r.book_id,
+                r.rating,
+                r.review_text,
+                r.created_at,
+                r.updated_at,
+                u.full_name AS member_name,
+                u.email AS member_email
+            FROM book_reviews r
+            JOIN users u ON u.user_id = r.member_id
+            WHERE r.book_id = %s
+            ORDER BY r.updated_at DESC, r.review_id DESC
+            LIMIT %s
+            """,
+            (book_id, limit),
+        ).fetchall()
+        summary = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS review_count,
+                COALESCE(ROUND(AVG(rating)::numeric, 2), 0) AS average_rating
+            FROM book_reviews
+            WHERE book_id = %s
+            """,
+            (book_id,),
+        ).fetchone()
+        viewer = {
+            "member_id": viewer_member_id,
+            "can_review": False,
+            "reason": "You can review only books you have issued at least once.",
+        }
+        if viewer_member_id is not None:
+            member = conn.execute(
+                "SELECT user_id, role, is_active FROM users WHERE user_id = %s",
+                (viewer_member_id,),
+            ).fetchone()
+            if member is None or member["role"] != "member":
+                viewer["reason"] = "Only member accounts can review books."
+            elif not member["is_active"]:
+                viewer["reason"] = "This member account is inactive."
+            else:
+                has_issued = conn.execute(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM book_loans
+                        WHERE member_id = %s AND book_id = %s
+                    ) AS has_issued
+                    """,
+                    (viewer_member_id, book_id),
+                ).fetchone()
+                viewer["can_review"] = bool(has_issued["has_issued"])
+                if viewer["can_review"]:
+                    viewer["reason"] = "You can review this book because you have issued it before."
+        else:
+            viewer = None
+    return success({"book": book, "reviews": rows, "summary": summary, "viewer": viewer})
+
+
+@app.post("/api/books/<int:book_id>/reviews")
+def upsert_book_review(book_id: int):
+    payload = get_json_body()
+    member_id = parse_int(payload.get("member_id"), "member_id", minimum=1)
+    rating = parse_int(payload.get("rating"), "rating", minimum=1)
+    if rating > 5:
+        raise ApiError("rating cannot be greater than 5.", 400)
+    review_text = str(payload.get("review_text", "")).strip()
+
+    with get_db_connection() as conn:
+        member = conn.execute(
+            "SELECT user_id, role, is_active FROM users WHERE user_id = %s",
+            (member_id,),
+        ).fetchone()
+        if member is None or member["role"] != "member":
+            raise ApiError("member_id must belong to a member user.", 404)
+        if not member["is_active"]:
+            raise ApiError("This member account is inactive.", 403)
+
+        book = fetch_book(conn, book_id)
+        if book is None:
+            raise ApiError("Book not found.", 404)
+        has_issued = conn.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM book_loans
+                WHERE member_id = %s AND book_id = %s
+            ) AS has_issued
+            """,
+            (member_id, book_id),
+        ).fetchone()
+        if not has_issued["has_issued"]:
+            raise ApiError("You can review only books you have issued at least once.", 403)
+
+        review = conn.execute(
+            """
+            INSERT INTO book_reviews (member_id, book_id, rating, review_text)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (member_id, book_id) DO UPDATE
+            SET
+                rating = EXCLUDED.rating,
+                review_text = EXCLUDED.review_text
+            RETURNING
+                review_id,
+                member_id,
+                book_id,
+                rating,
+                review_text,
+                created_at,
+                updated_at
+            """,
+            (member_id, book_id, rating, review_text),
+        ).fetchone()
+
+    invalidate_all_caches()
+    return success(review, 201)
+
+
+@app.post("/api/reviews/<int:review_id>/delete")
+def delete_book_review(review_id: int):
+    payload = get_json_body()
+    member_id = parse_int(payload.get("member_id"), "member_id", minimum=1)
+
+    with get_db_connection() as conn:
+        deleted = conn.execute(
+            """
+            DELETE FROM book_reviews
+            WHERE review_id = %s
+              AND member_id = %s
+            RETURNING
+                review_id,
+                member_id,
+                book_id,
+                rating,
+                review_text,
+                created_at,
+                updated_at
+            """,
+            (review_id, member_id),
+        ).fetchone()
+    if deleted is None:
+        raise ApiError("Review not found.", 404)
+
+    invalidate_all_caches()
+    return success(deleted)
+
+
+@app.get("/api/users/<int:user_id>/notifications")
+def list_user_notifications(user_id: int):
+    unread_only = parse_bool_arg("unread_only", default=False)
+    limit = parse_int(request.args.get("limit", 50), "limit", minimum=1)
+    if limit > 100:
+        raise ApiError("limit cannot be greater than 100.", 400)
+
+    params: list[Any] = [user_id]
+    unread_sql = ""
+    if unread_only:
+        unread_sql = "AND n.is_read = FALSE"
+
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT
+                n.notification_id,
+                n.user_id,
+                n.category,
+                n.title,
+                n.message,
+                n.link_path,
+                n.book_id,
+                n.is_read,
+                n.read_at,
+                n.created_at,
+                n.updated_at,
+                b.title AS book_title,
+                l.name AS library_name
+            FROM notifications n
+            LEFT JOIN books b ON b.book_id = n.book_id
+            LEFT JOIN libraries l ON l.library_id = b.library_id
+            WHERE n.user_id = %s
+            {unread_sql}
+            ORDER BY n.created_at DESC
+            LIMIT %s
+            """,
+            (user_id, limit),
+        ).fetchall()
+    return success(rows)
+
+
+@app.post("/api/notifications/<int:notification_id>/read")
+def mark_notification_read(notification_id: int):
+    payload = get_json_body()
+    user_id = parse_int(payload.get("user_id"), "user_id", minimum=1)
+
+    with get_db_connection() as conn:
+        updated = conn.execute(
+            """
+            UPDATE notifications
+            SET
+                is_read = TRUE,
+                read_at = COALESCE(read_at, %s)
+            WHERE notification_id = %s
+              AND user_id = %s
+            RETURNING
+                notification_id,
+                user_id,
+                category,
+                title,
+                message,
+                link_path,
+                book_id,
+                is_read,
+                read_at,
+                created_at,
+                updated_at
+            """,
+            (utc_now(), notification_id, user_id),
+        ).fetchone()
+    if updated is None:
+        raise ApiError("Notification not found.", 404)
+
+    invalidate_dashboard_cache()
+    return success(updated)
+
+
+@app.post("/api/users/<int:user_id>/notifications/read-all")
+def mark_all_notifications_read(user_id: int):
+    with get_db_connection() as conn:
+        conn.execute(
+            """
+            UPDATE notifications
+            SET
+                is_read = TRUE,
+                read_at = COALESCE(read_at, %s)
+            WHERE user_id = %s
+              AND is_read = FALSE
+            """,
+            (utc_now(), user_id),
+        )
+
+    invalidate_dashboard_cache()
+    return success({"user_id": user_id, "marked_read": True})
 
 
 def run():

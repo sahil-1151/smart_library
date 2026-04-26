@@ -64,8 +64,11 @@ class BackendHandler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=ROOT_DIR, **kwargs)
 
     def end_headers(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
+        origin = self.headers.get("Origin", "").strip() if hasattr(self, "headers") else ""
+        self.send_header("Access-Control-Allow-Origin", origin or "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Credentials", "true")
+        self.send_header("Vary", "Origin")
         self.send_header(
             "Access-Control-Allow-Headers",
             "Content-Type, Authorization, X-Smart-Library-Session, "
@@ -116,6 +119,7 @@ class BackendHandler(SimpleHTTPRequestHandler):
             "Accept",
             "Content-Type",
             "Authorization",
+            "Cookie",
             "X-Smart-Library-Session",
             "X-Smart-Library-Actor-Id",
             "X-Smart-Library-Actor-Role",
