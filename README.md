@@ -96,7 +96,7 @@ If you have already migrated the legacy text data into PostgreSQL, the next step
 Files added for this:
 - `api_server.py` → Flask + PostgreSQL API
 - `requirements.txt` → Python dependencies
-- `.env.example` → environment variable template
+
 
 Setup:
 1. Install dependencies:
